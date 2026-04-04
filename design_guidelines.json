@@ -1,0 +1,112 @@
+{
+  "theme": "dark",
+  "archetype": "Archetype 2: The Performance Pro (Quant/Institutional Crypto Variant)",
+  "brand_name": "AlgoTrade X",
+  "typography": {
+    "heading": "Chivo",
+    "body": "IBM Plex Sans",
+    "monospace": "JetBrains Mono",
+    "scale": {
+      "h1": "text-4xl sm:text-5xl tracking-tight font-black",
+      "h2": "text-2xl sm:text-3xl tracking-tight font-bold",
+      "h3": "text-lg sm:text-xl font-bold",
+      "metric": "text-5xl lg:text-6xl tracking-tighter font-black font-mono",
+      "body": "text-sm sm:text-base leading-relaxed",
+      "label": "text-xs tracking-[0.2em] uppercase font-mono text-zinc-400"
+    }
+  },
+  "colors": {
+    "background": {
+      "base": "#050505",
+      "surface": "#0F0F11",
+      "surface_hover": "#1A1A1D",
+      "panel": "#0A0A0A"
+    },
+    "text": {
+      "primary": "#FFFFFF",
+      "secondary": "#A1A1AA",
+      "muted": "#71717A",
+      "inverse": "#000000"
+    },
+    "brand": {
+      "primary": "#FCD535",
+      "primary_hover": "#FDE047",
+      "accent": "#3B82F6",
+      "profit": "#10B981",
+      "loss": "#EF4444",
+      "active": "#00FF66"
+    },
+    "border": {
+      "subtle": "rgba(255, 255, 255, 0.08)",
+      "focus": "rgba(255, 255, 255, 0.3)"
+    }
+  },
+  "layout": {
+    "strategy": "MODE B: THE CONTROL ROOM GRID",
+    "spacing": "Dense architecture. gap-4, p-4 to p-6. Optimize for data density.",
+    "corners": "rounded-sm (2px) to rounded-none. Strict, institutional edges. No bubbly radius.",
+    "borders": "Visible skeleton. Use 1px solid border-white/10 on almost all panels.",
+    "structure": "grid-cols-1 md:grid-cols-4 lg:grid-cols-12 gap-4"
+  },
+  "components": {
+    "cards": {
+      "style": "Flat background (#0F0F11), 1px solid border (#ffffff14).",
+      "hover": "Subtle background shift to #1A1A1D, border brightens to #ffffff40. No lift/shadows."
+    },
+    "buttons": {
+      "primary": "Solid #FCD535 (Binance Yellow), black text, font-bold, rounded-sm, hover:brightness-110",
+      "danger": "Solid #EF4444, white text. For stop/emergency halt.",
+      "success": "Solid #10B981, white text. For starting bot.",
+      "ghost": "Transparent, 1px border-white/10, text-white hover:bg-white/5"
+    },
+    "tables": {
+      "style": "Extremely dense. py-2 px-3 cells. JetBrains Mono for ALL numeric data.",
+      "header": "Sticky header, text-xs uppercase tracking-wider text-zinc-400 border-b border-white/10.",
+      "rows": "Hover state: bg-white/5. Green/Red text for P&L columns."
+    },
+    "navigation": {
+      "style": "Top horizontal terminal bar. Pure black (#000000) with 1px bottom border (#ffffff14).",
+      "links": "text-sm font-mono text-zinc-400 hover:text-white"
+    },
+    "charts": {
+      "style": "Deep black backgrounds. Candlestick or line charts using #10B981 (Up) and #EF4444 (Down). Grid lines: 1px solid #ffffff08."
+    }
+  },
+  "animations": {
+    "hover": "Micro-interactions only. 150ms ease-in-out transitions on borders and backgrounds.",
+    "status_indicator": "Pulsing neon dot (w-2 h-2 rounded-full bg-emerald-500 animate-pulse) next to 'BOT ACTIVE' text.",
+    "data_feed": "Flash green/red background briefly on rapid price changes."
+  },
+  "images": [
+    {
+      "url": "https://images.pexels.com/photos/29012803/pexels-photo-29012803.jpeg",
+      "category": "login_background",
+      "description": "Dark neon Bitcoin sign for the authentication screen or hero section."
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1700427296131-0cc4c4610fc6",
+      "category": "texture",
+      "description": "Abstract dark tech motherboard texture to be used at 5% opacity inside empty states or the 'Algo Config' panel."
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1639825752750-5061ded5503b",
+      "category": "placeholder_chart",
+      "description": "Stock trading chart reference if dynamic charts are loading."
+    }
+  ],
+  "accessibility_and_testing": {
+    "contrast": "Ensure all text against #050505 meets 4.5:1 ratio. Muted text must be at least #71717A.",
+    "testing_attributes": "Every button, input, tab, and row MUST have a kebab-case data-testid (e.g., data-testid='start-bot-btn', data-testid='daily-profit-metric')."
+  },
+  "instructions_to_main_agent": [
+    "This is an automated trading bot designed for a user with NO finance knowledge but aiming for $1k/day on Binance.",
+    "Vibe: High-end 'Bloomberg Terminal' meets algorithmic power. Serious, dark, dense, trustworthy.",
+    "Use JetBrains Mono for all numbers, prices, crypto pairs (BTC/USDT), and P&L metrics.",
+    "Use Chivo for headings. Do NOT use Inter.",
+    "Build a 'Bot Control Center' widget prominently featuring START/PAUSE toggles.",
+    "Include a 'Daily Goal Progress' widget showing progress toward $1,000.",
+    "Integrate a Live Chart area (mocked Recharts if real data isn't ready) with high contrast.",
+    "Create a 'Recent Trades' table using strict monospaced columns.",
+    "Avoid soft shadows entirely. Use 1px borders (border-white/10) to separate panels. Adhere to 'MODE B: CONTROL ROOM' grid."
+  ]
+}
