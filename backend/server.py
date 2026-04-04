@@ -14,6 +14,8 @@ from datetime import datetime, timezone
 import asyncio
 import json
 from enum import Enum
+from telegram_service import initialize_telegram_service, get_telegram_service
+from scheduler_service import DailyReportScheduler
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -43,11 +45,15 @@ bot_state = {
     "total_trades": 0,
     "winning_trades": 0,
     "balance": 0.0,
-    "last_updated": None
+    "last_updated": None,
+    "telegram_enabled": False
 }
 
 # Active WebSocket connections
 active_connections: List[WebSocket] = []
+
+# Daily report scheduler
+daily_scheduler: Optional[DailyReportScheduler] = None
 
 # Models
 class OrderSide(str, Enum):
@@ -67,6 +73,8 @@ class ApiKeysInput(BaseModel):
     api_key: str
     api_secret: str
     testnet: bool = True
+    telegram_bot_token: Optional[str] = None
+    telegram_chat_id: Optional[str] = None
 
 class BotConfig(BaseModel):
     strategy: TradingStrategy
@@ -270,7 +278,13 @@ class TradingEngine:
             if position.profit_loss > 0:
                 bot_state["winning_trades"] += 1
             
-            await broadcast_message({"type": "trade", "data": position.model_dump()})
+            # Send Telegram notification
+            trade_dict = position.model_dump()
+            telegram_service = get_telegram_service()
+            if telegram_service and telegram_service.enabled:
+                await telegram_service.send_trade_notification(trade_dict)
+            
+            await broadcast_message({"type": "trade", "data": trade_dict})
             
             del self.active_positions[symbol]
             
@@ -335,6 +349,11 @@ async def start_bot(config: BotConfig, background_tasks: BackgroundTasks):
     trading_engine = TradingEngine(config)
     bot_state["is_running"] = True
     bot_state["strategy"] = config.strategy.value
+    
+    # Send Telegram notification
+    telegram_service = get_telegram_service()
+    if telegram_service and telegram_service.enabled:
+        await telegram_service.send_bot_status_notification(True, config.strategy.value)
     
     background_tasks.add_task(trading_engine.run)
     
@@ -456,6 +475,26 @@ async def get_daily_stats():
         logger.error(f"Error fetching daily stats: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@api_router.post("/telegram/test")
+async def test_telegram():
+    """Test Telegram notification"""
+    telegram_service = get_telegram_service()
+    if not telegram_service or not telegram_service.enabled:
+        raise HTTPException(status_code=400, detail="Telegram not configured")
+    
+    await telegram_service.send_message("🤖 *Prueba de Notificaci\u00f3n*\\n\\n\u2705 Telegram configurado correctamente\\!")
+    return {"status": "success", "message": "Test notification sent"}
+
+@api_router.post("/telegram/daily-report")
+async def trigger_daily_report():
+    """Manually trigger daily report"""
+    telegram_service = get_telegram_service()
+    if not telegram_service or not telegram_service.enabled:
+        raise HTTPException(status_code=400, detail="Telegram not configured")
+    
+    await send_daily_report()
+    return {"status": "success", "message": "Daily report sent"}
+
 @api_router.websocket("/ws/market")
 async def websocket_market_data(websocket: WebSocket):
     """WebSocket for real-time market data"""
@@ -482,6 +521,12 @@ app.add_middleware(
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
+    global daily_scheduler
+    
     if binance_client:
         await binance_client.close_connection()
+    
+    if daily_scheduler:
+        daily_scheduler.stop()
+    
     client.close()

@@ -18,6 +18,8 @@ const Dashboard = () => {
   const [apiKey, setApiKey] = useState("");
   const [apiSecret, setApiSecret] = useState("");
   const [isTestnet, setIsTestnet] = useState(true);
+  const [telegramToken, setTelegramToken] = useState("");
+  const [telegramChatId, setTelegramChatId] = useState("");
   const [isConfigured, setIsConfigured] = useState(false);
   const [botStatus, setBotStatus] = useState(null);
   const [prices, setPrices] = useState([]);
@@ -93,18 +95,29 @@ const Dashboard = () => {
     }
 
     try {
-      const response = await axios.post(`${API}/setup`, {
+      const payload = {
         api_key: apiKey,
         api_secret: apiSecret,
         testnet: isTestnet
-      });
+      };
       
-      toast.success("API Keys configuradas correctamente");
+      if (telegramToken && telegramChatId) {
+        payload.telegram_bot_token = telegramToken;
+        payload.telegram_chat_id = telegramChatId;
+      }
+      
+      const response = await axios.post(`${API}/setup`, payload);
+      
+      const successMsg = response.data.telegram_enabled 
+        ? "API Keys y Telegram configurados correctamente" 
+        : "API Keys configuradas correctamente";
+      
+      toast.success(successMsg);
       setIsConfigured(true);
       fetchPrices();
       fetchBalance();
     } catch (error) {
-      toast.error("Error al configurar API Keys: " + error.response?.data?.detail);
+      toast.error("Error al configurar: " + error.response?.data?.detail);
     }
   };
 
@@ -182,6 +195,30 @@ const Dashboard = () => {
                 />
               </div>
 
+              <div className="border-t border-white/10 pt-4 mt-2">
+                <label className="text-xs text-[#10B981] font-mono uppercase tracking-wider block mb-3">📱 TELEGRAM (OPCIONAL)</label>
+                
+                <div className="space-y-3">
+                  <Input
+                    type="text"
+                    value={telegramToken}
+                    onChange={(e) => setTelegramToken(e.target.value)}
+                    placeholder="Telegram Bot Token"
+                    className="bg-[#0A0A0A] border-white/10 text-white font-mono text-sm"
+                    data-testid="telegram-token-input"
+                  />
+                  
+                  <Input
+                    type="text"
+                    value={telegramChatId}
+                    onChange={(e) => setTelegramChatId(e.target.value)}
+                    placeholder="Tu Chat ID"
+                    className="bg-[#0A0A0A] border-white/10 text-white font-mono text-sm"
+                    data-testid="telegram-chatid-input"
+                  />
+                </div>
+              </div>
+
               <Button
                 onClick={handleSetupKeys}
                 className="w-full bg-[#FCD535] hover:bg-[#FDE047] text-black font-bold rounded-sm h-12"
@@ -190,10 +227,14 @@ const Dashboard = () => {
                 CONFIGURAR Y CONTINUAR
               </Button>
 
-              <div className="p-4 bg-[#1A1A1D] border border-white/10 rounded-sm">
+              <div className="p-4 bg-[#1A1A1D] border border-white/10 rounded-sm space-y-2">
                 <p className="text-xs text-zinc-400 leading-relaxed" style={{ fontFamily: 'IBM Plex Sans' }}>
-                  <strong className="text-white">Instrucciones:</strong> Obtén tus API keys desde Binance → API Management. 
+                  <strong className="text-white">Binance:</strong> Obtén tus API keys desde Binance → API Management. 
                   Activa permisos de "Enable Spot & Margin Trading". Para pruebas seguras, usa el Testnet.
+                </p>
+                <p className="text-xs text-zinc-400 leading-relaxed" style={{ fontFamily: 'IBM Plex Sans' }}>
+                  <strong className="text-[#10B981]">Telegram:</strong> Habla con @BotFather para crear tu bot. 
+                  Obtén tu Chat ID hablando con @userinfobot. Recibirás notificaciones de cada trade y reporte diario a las 23:59 UTC.
                 </p>
               </div>
             </div>
