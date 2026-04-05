@@ -84,6 +84,8 @@ class BotConfig(BaseModel):
     max_trade_amount: float = 10.0
     profit_target: float = 1.5
     stop_loss: float = 0.5
+    use_percentage: bool = True
+    balance_percentage: float = 5.0
 
 class Trade(BaseModel):
     model_config = ConfigDict(extra="ignore")
