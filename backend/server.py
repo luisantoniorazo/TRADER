@@ -555,6 +555,14 @@ async def get_account_balance():
     if not binance_client:
         raise HTTPException(status_code=400, detail="Binance client not initialized")
     
+    # Crypto assets we care about - filter out testnet fiat junk
+    RELEVANT_ASSETS = {
+        "USDT", "BTC", "ETH", "BNB", "SOL", "XRP", "ADA", "DOGE", "DOT",
+        "AVAX", "SHIB", "LINK", "ATOM", "LTC", "UNI", "ETC", "NEAR", "APT",
+        "ARB", "SUI", "FIL", "AAVE", "ALGO", "PEPE", "MATIC", "FTM", "MANA",
+        "SAND", "AXS", "RUNE", "BUSD"
+    }
+    
     try:
         account = await binance_client.get_account()
         balances = []
@@ -564,7 +572,7 @@ async def get_account_balance():
             locked = float(balance["locked"])
             total = free + locked
             
-            if total > 0:
+            if total > 0 and balance["asset"] in RELEVANT_ASSETS:
                 balances.append({
                     "asset": balance["asset"],
                     "free": free,
