@@ -139,7 +139,7 @@ async def initialize_binance_client(api_key: str, api_secret: str, testnet: bool
                 
                 # Fall back to demo mode
                 from demo_trading_engine import create_demo_client
-                binance_client = await create_demo_client(api_key, api_secret, testnet)
+                binance_client = await create_demo_client(api_key, api_secret, testnet, db)
                 logger.info("✅ DEMO MODE activated - All trades are simulated!")
                 return True
         else:
@@ -155,7 +155,7 @@ async def initialize_binance_client(api_key: str, api_secret: str, testnet: bool
         # Last resort: demo mode
         try:
             from demo_trading_engine import create_demo_client
-            binance_client = await create_demo_client(api_key, api_secret, testnet)
+            binance_client = await create_demo_client(api_key, api_secret, testnet, db)
             logger.info("✅ DEMO MODE activated as fallback")
             return True
         except:
@@ -595,6 +595,50 @@ async def get_daily_stats():
         }
     except Exception as e:
         logger.error(f"Error fetching daily stats: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/demo/set-balance")
+async def set_demo_balance(data: dict):
+    """Set demo account balance manually"""
+    balance = data.get("balance", 1000)
+    
+    if not isinstance(balance, (int, float)) or balance < 0:
+        raise HTTPException(status_code=400, detail="Invalid balance amount")
+    
+    try:
+        await db.demo_balance.update_one(
+            {"account": "main"},
+            {"$set": {
+                "balances": {
+                    "USDT": {"free": float(balance), "locked": 0.0},
+                    "BTC": {"free": 0.0, "locked": 0.0},
+                    "ETH": {"free": 0.0, "locked": 0.0},
+                    "BNB": {"free": 0.0, "locked": 0.0}
+                },
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }},
+            upsert=True
+        )
+        
+        return {
+            "status": "success",
+            "message": f"Balance set to ${balance:.2f}",
+            "new_balance": balance
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/demo/reset-balance")
+async def reset_demo_balance():
+    """Reset demo account balance to $1,000"""
+    try:
+        await db.demo_balance.delete_one({"account": "main"})
+        return {
+            "status": "success",
+            "message": "Balance reset to $1,000.00",
+            "new_balance": 1000.0
+        }
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @api_router.post("/telegram/configure")

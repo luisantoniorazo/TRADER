@@ -145,15 +145,42 @@ class DemoMarketData:
         return list(reversed(klines))
 
 class DemoAccount:
-    """Simulate a Binance account"""
+    """Simulate a Binance account with persistent balance"""
     
-    def __init__(self, initial_balance: float = 1000.0):
+    def __init__(self, initial_balance: float = 1000.0, db_client = None):
+        self.db = db_client
         self.balances = {
             "USDT": {"free": initial_balance, "locked": 0.0},
             "BTC": {"free": 0.0, "locked": 0.0},
             "ETH": {"free": 0.0, "locked": 0.0},
             "BNB": {"free": 0.0, "locked": 0.0}
         }
+    
+    async def load_balance_from_db(self):
+        """Load balance from database"""
+        if self.db:
+            try:
+                balance_doc = await self.db.demo_balance.find_one({"account": "main"})
+                if balance_doc and "balances" in balance_doc:
+                    self.balances = balance_doc["balances"]
+                    logger.info(f"💾 Loaded balance from DB: USDT ${self.balances['USDT']['free']:.2f}")
+                    return True
+            except Exception as e:
+                logger.error(f"Error loading balance from DB: {str(e)}")
+        return False
+    
+    async def save_balance_to_db(self):
+        """Save balance to database"""
+        if self.db:
+            try:
+                await self.db.demo_balance.update_one(
+                    {"account": "main"},
+                    {"$set": {"balances": self.balances, "updated_at": datetime.now(timezone.utc).isoformat()}},
+                    upsert=True
+                )
+                logger.info(f"💾 Saved balance to DB: USDT ${self.balances['USDT']['free']:.2f}")
+            except Exception as e:
+                logger.error(f"Error saving balance to DB: {str(e)}")
     
     def get_balance(self, asset: str) -> dict:
         """Get balance for specific asset"""
@@ -222,6 +249,14 @@ class DemoAccount:
             else:
                 status = "REJECTED"
                 logger.warning(f"❌ DEMO SELL rejected: Insufficient {base_asset}")
+        
+        # Save balance to DB after each trade
+        import asyncio
+        try:
+            loop = asyncio.get_event_loop()
+            loop.create_task(self.save_balance_to_db())
+        except:
+            pass
         
         return {
             "orderId": random.randint(10000000, 99999999),
@@ -317,7 +352,9 @@ class DemoBinanceClient:
         """Get server time"""
         return {"serverTime": int(datetime.now(timezone.utc).timestamp() * 1000)}
 
-async def create_demo_client(api_key: str = None, api_secret: str = None, testnet: bool = True):
-    """Create a demo Binance client"""
+async def create_demo_client(api_key: str = None, api_secret: str = None, testnet: bool = True, db_client = None):
+    """Create a demo Binance client with persistent balance"""
     logger.info("🎮 Creating DEMO Binance client - No real trading!")
-    return DemoBinanceClient(api_key, api_secret)
+    client = DemoBinanceClient(api_key, api_secret, db_client)
+    await client.initialize()
+    return client
