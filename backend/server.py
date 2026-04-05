@@ -309,6 +309,18 @@ class TradingEngine:
             
             self.active_positions[symbol] = trade
             
+            # Execute the trade in demo account to update balance
+            try:
+                order_result = await binance_client.create_order(
+                    symbol=symbol,
+                    side="BUY",
+                    type="MARKET",
+                    quantity=quantity
+                )
+                logger.info(f"📝 Order result: {order_result.get('status', 'UNKNOWN')}")
+            except Exception as e:
+                logger.error(f"Error executing order: {str(e)}")
+            
             # Save to database
             trade_dict = trade.model_dump()
             trade_dict["timestamp"] = trade_dict["timestamp"].isoformat()
@@ -335,6 +347,18 @@ class TradingEngine:
             position.status = "closed"
             
             logger.info(f"Attempting SELL: {symbol} at {price}, profit: {position.profit_loss}")
+            
+            # Execute the sell order in demo account to update balance
+            try:
+                order_result = await binance_client.create_order(
+                    symbol=symbol,
+                    side="SELL",
+                    type="MARKET",
+                    quantity=position.quantity
+                )
+                logger.info(f"📝 Sell order result: {order_result.get('status', 'UNKNOWN')}")
+            except Exception as e:
+                logger.error(f"Error executing sell order: {str(e)}")
             
             # Update in database
             await db.trades.update_one(

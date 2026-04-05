@@ -198,21 +198,30 @@ class DemoAccount:
         else:
             return {"error": "Unsupported symbol"}
         
+        # Ensure assets exist
+        if base_asset not in self.balances:
+            self.balances[base_asset] = {"free": 0.0, "locked": 0.0}
+        
         if side == "BUY":
             cost = quantity * price
             if self.balances[quote_asset]["free"] >= cost:
                 self.balances[quote_asset]["free"] -= cost
                 self.balances[base_asset]["free"] += quantity
                 status = "FILLED"
+                logger.info(f"✅ DEMO BUY executed: {symbol} - Cost: ${cost:.2f}, New USDT balance: ${self.balances[quote_asset]['free']:.2f}")
             else:
                 status = "REJECTED"
+                logger.warning(f"❌ DEMO BUY rejected: Insufficient balance")
         elif side == "SELL":
             if self.balances[base_asset]["free"] >= quantity:
                 self.balances[base_asset]["free"] -= quantity
-                self.balances[quote_asset]["free"] += quantity * price
+                proceeds = quantity * price
+                self.balances[quote_asset]["free"] += proceeds
                 status = "FILLED"
+                logger.info(f"✅ DEMO SELL executed: {symbol} - Proceeds: ${proceeds:.2f}, New USDT balance: ${self.balances[quote_asset]['free']:.2f}")
             else:
                 status = "REJECTED"
+                logger.warning(f"❌ DEMO SELL rejected: Insufficient {base_asset}")
         
         return {
             "orderId": random.randint(10000000, 99999999),
@@ -288,7 +297,9 @@ class DemoBinanceClient:
             # Market order - get current price
             price = self.market_data.get_price(symbol)
         
-        return self.account.execute_trade(symbol, side, quantity, price)
+        result = self.account.execute_trade(symbol, side, quantity, price)
+        logger.info(f"💰 Balance after trade - USDT: ${float(self.account.get_balance('USDT')['free']):.2f}")
+        return result
     
     async def order_market(self, **params) -> dict:
         """Create market order"""
