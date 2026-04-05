@@ -355,6 +355,6 @@ class DemoBinanceClient:
 async def create_demo_client(api_key: str = None, api_secret: str = None, testnet: bool = True, db_client = None):
     """Create a demo Binance client with persistent balance"""
     logger.info("🎮 Creating DEMO Binance client - No real trading!")
-    client = DemoBinanceClient(api_key, api_secret, db_client)
+    client = DemoBinanceClient(api_key=api_key, api_secret=api_secret, db_client=db_client)
     await client.initialize()
     return client
