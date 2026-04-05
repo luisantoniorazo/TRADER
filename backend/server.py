@@ -108,11 +108,20 @@ class PriceData(BaseModel):
 async def initialize_binance_client(api_key: str, api_secret: str, testnet: bool = True):
     global binance_client
     try:
-        binance_client = await AsyncClient.create(
-            api_key=api_key,
-            api_secret=api_secret,
-            testnet=testnet
-        )
+        if testnet:
+            # Use testnet URLs explicitly
+            binance_client = await AsyncClient.create(
+                api_key=api_key,
+                api_secret=api_secret,
+                testnet=True,
+                tld='com'
+            )
+        else:
+            binance_client = await AsyncClient.create(
+                api_key=api_key,
+                api_secret=api_secret,
+                testnet=False
+            )
         logger.info(f"Binance client initialized (testnet={testnet})")
         return True
     except Exception as e:
@@ -518,6 +527,39 @@ async def trigger_daily_report():
     
     await send_daily_report()
     return {"status": "success", "message": "Daily report sent"}
+
+@api_router.post("/test-binance")
+async def test_binance_connection(keys: ApiKeysInput):
+    """Test Binance connection without saving"""
+    try:
+        # Try to create a temporary client
+        test_client = await AsyncClient.create(
+            api_key=keys.api_key,
+            api_secret=keys.api_secret,
+            testnet=keys.testnet,
+            tld='com'
+        )
+        
+        # Try to get server time
+        server_time = await test_client.get_server_time()
+        
+        # Try to ping
+        await test_client.ping()
+        
+        await test_client.close_connection()
+        
+        return {
+            "status": "success",
+            "message": "Binance connection successful",
+            "testnet": keys.testnet,
+            "server_time": server_time
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e),
+            "testnet": keys.testnet
+        }
 
 @api_router.websocket("/ws/market")
 async def websocket_market_data(websocket: WebSocket):
