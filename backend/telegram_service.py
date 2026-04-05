@@ -48,25 +48,43 @@ class TelegramNotificationService:
 
     async def send_trade_notification(self, trade: dict):
         side = trade.get("side", "?")
-        price = trade.get("entry_price") or trade.get("exit_price", 0)
-        qty = trade.get("quantity", 0)
         symbol = trade.get("symbol", "?")
+        qty = trade.get("quantity", 0)
 
-        lines = [
-            f"{'🟢' if side == 'BUY' else '🔴'} <b>Trade Ejecutado</b>",
-            "",
-            f"Simbolo: {symbol}",
-            f"Tipo: {side}",
-            f"Precio: ${price:.2f}",
-            f"Cantidad: {qty:.6f}",
-        ]
+        if side == "BUY":
+            entry_price = trade.get("entry_price", 0)
+            total_cost = entry_price * qty
+            msg = (
+                f"🟢 <b>COMPRA Ejecutada</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━\n\n"
+                f"Simbolo: {symbol}\n"
+                f"Precio: ${entry_price:.4f}\n"
+                f"Cantidad: {qty:.6f}\n"
+                f"Inversion: ${total_cost:.2f} USDT\n\n"
+                f"Estado: Posicion ABIERTA\n"
+                f"⏰ {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')} UTC"
+            )
+        else:
+            entry_price = trade.get("entry_price", 0)
+            exit_price = trade.get("exit_price", 0)
+            pl = trade.get("profit_loss", 0)
+            pl_pct = ((exit_price - entry_price) / entry_price * 100) if entry_price > 0 else 0
+            icon = "💰" if pl > 0 else "📉"
+            result = "GANANCIA" if pl > 0 else "PERDIDA"
+            msg = (
+                f"🔴 <b>VENTA Ejecutada</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━\n\n"
+                f"Simbolo: {symbol}\n"
+                f"Precio Entrada: ${entry_price:.4f}\n"
+                f"Precio Salida: ${exit_price:.4f}\n"
+                f"Cantidad: {qty:.6f}\n\n"
+                f"{icon} <b>Resultado: {result}</b>\n"
+                f"P&L: ${pl:+.2f} ({pl_pct:+.2f}%)\n\n"
+                f"Estado: Posicion CERRADA\n"
+                f"⏰ {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')} UTC"
+            )
 
-        pl = trade.get("profit_loss")
-        if pl is not None:
-            lines.append(f"{'💰' if pl > 0 else '📉'} Ganancia/Perdida: ${pl:.2f}")
-
-        lines.append(f"\n⏰ {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')} UTC")
-        await self.send_message("\n".join(lines))
+        await self.send_message(msg)
 
     async def send_daily_report(self, stats: dict, balance: float):
         total_profit = stats.get("total_profit", 0)
