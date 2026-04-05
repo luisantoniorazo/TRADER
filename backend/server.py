@@ -215,29 +215,49 @@ class TradingEngine:
     async def analyze_and_trade(self, symbol: str):
         """Analyze market and execute trades"""
         try:
+            logger.info(f"🔍 Getting indicators for {symbol}...")
             indicators = await self.calculate_technical_indicators(symbol)
             if not indicators:
+                logger.warning(f"⚠️ No indicators available for {symbol}")
                 return
             
             rsi = indicators["rsi"]
             price = indicators["price"]
             
+            logger.info(f"📊 {symbol}: Price=${price:.2f}, RSI={rsi:.2f}")
+            
             # Aggressive scalping strategy
             if self.config.strategy == TradingStrategy.AGGRESSIVE_SCALPING:
                 # Buy signal: RSI < 35 (oversold)
                 if rsi < 35 and symbol not in self.active_positions:
+                    logger.info(f"🟢 BUY SIGNAL for {symbol}: RSI={rsi:.2f} < 35 (oversold)")
                     await self.execute_buy(symbol, price)
+                elif symbol not in self.active_positions:
+                    logger.info(f"⏸️  No buy signal for {symbol}: RSI={rsi:.2f} (waiting for < 35)")
                 
                 # Sell signal: RSI > 65 (overbought) or take profit
                 elif symbol in self.active_positions:
                     position = self.active_positions[symbol]
                     profit_pct = ((price - position.entry_price) / position.entry_price) * 100
                     
-                    if profit_pct >= self.config.profit_target or profit_pct <= -self.config.stop_loss or rsi > 65:
+                    logger.info(f"📊 Position {symbol}: Entry=${position.entry_price:.2f}, Current=${price:.2f}, Profit={profit_pct:.2f}%")
+                    
+                    if profit_pct >= self.config.profit_target:
+                        logger.info(f"💰 SELL SIGNAL for {symbol}: Profit target reached {profit_pct:.2f}% >= {self.config.profit_target}%")
                         await self.execute_sell(symbol, price, profit_pct)
+                    elif profit_pct <= -self.config.stop_loss:
+                        logger.info(f"🛑 SELL SIGNAL for {symbol}: Stop loss triggered {profit_pct:.2f}% <= -{self.config.stop_loss}%")
+                        await self.execute_sell(symbol, price, profit_pct)
+                    elif rsi > 65:
+                        logger.info(f"🔴 SELL SIGNAL for {symbol}: RSI={rsi:.2f} > 65 (overbought)")
+                        await self.execute_sell(symbol, price, profit_pct)
+                    else:
+                        logger.info(f"⏳ Holding {symbol}: Waiting for signal (RSI={rsi:.2f}, Profit={profit_pct:.2f}%)")
         
         except Exception as e:
-            logger.error(f"Error in analyze_and_trade for {symbol}: {str(e)}")
+            logger.error(f"❌ Error in analyze_and_trade for {symbol}: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
     
     async def execute_buy(self, symbol: str, price: float):
         """Execute buy order"""
@@ -337,27 +357,39 @@ class TradingEngine:
     async def run(self):
         """Main trading loop"""
         self.is_running = True
-        logger.info("Trading bot started")
+        logger.info("🚀 Trading bot started - DEMO MODE")
+        logger.info(f"📊 Strategy: {self.config.strategy.value}")
+        logger.info(f"💰 Reinvestment: {self.config.balance_percentage}% per trade")
+        logger.info(f"🎯 Symbols: {', '.join(self.config.symbols)}")
         
+        iteration = 0
         while self.is_running:
             try:
+                iteration += 1
+                logger.info(f"🔄 Trading loop iteration {iteration}")
+                
                 for symbol in self.config.symbols:
+                    logger.info(f"📈 Analyzing {symbol}...")
                     await self.analyze_and_trade(symbol)
                 
                 # Update balance
                 try:
                     balance = await binance_client.get_asset_balance(asset="USDT")
                     bot_state["balance"] = float(balance["free"]) if balance else 0
-                except:
-                    pass
+                    logger.info(f"💰 Current balance: ${bot_state['balance']:.2f} USDT")
+                except Exception as e:
+                    logger.error(f"Error getting balance: {str(e)}")
                 
                 bot_state["last_updated"] = datetime.now(timezone.utc).isoformat()
                 await broadcast_message({"type": "bot_state", "data": bot_state})
                 
+                logger.info(f"⏳ Waiting 10 seconds before next check...")
                 await asyncio.sleep(10)  # Check every 10 seconds
             
             except Exception as e:
-                logger.error(f"Error in trading loop: {str(e)}")
+                logger.error(f"❌ Error in trading loop: {str(e)}")
+                import traceback
+                logger.error(traceback.format_exc())
                 await asyncio.sleep(5)
     
     def stop(self):
