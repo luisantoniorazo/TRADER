@@ -54,7 +54,21 @@ const Dashboard = () => {
 
   const fetchPrices = async () => {
     try {
-      const response = await axios.get(`${API}/market/prices`);
+      const symbols = [
+        "BTCUSDT", "ETHUSDT", "BNBUSDT",
+        "SOLUSDT", "XRPUSDT", "ADAUSDT",
+        "DOGEUSDT", "MATICUSDT", "DOTUSDT",
+        "AVAXUSDT", "SHIBUSDT", "LINKUSDT",
+        "ATOMUSDT", "LTCUSDT", "UNIUSDT",
+        "ETCUSDT", "NEARUSDT", "APTUSDT",
+        "ARBUSDT", "OPUSDT", "FILUSDT",
+        "LDOUSDT", "INJUSDT", "SUIUSDT",
+        "RNDRUSDT", "PEPEUSDT", "RUNEUSDT",
+        "AAVEUSDT", "MKRUSDT", "SANDUSDT",
+        "MANAUSDT", "GRTUSDT", "ALGOUSDT"
+      ].join(",");
+      
+      const response = await axios.get(`${API}/market/prices?symbols=${symbols}`);
       setPrices(response.data);
     } catch (error) {
       console.error("Error fetching prices:", error);
@@ -360,24 +374,38 @@ const Dashboard = () => {
           {/* Market Prices */}
           <div className="lg:col-span-12">
             <Card className="bg-[#0F0F11] border border-white/10 p-6" data-testid="market-prices-widget">
-              <h2 className="text-lg font-bold text-white mb-4" style={{ fontFamily: 'Chivo' }}>PRECIOS DE MERCADO</h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-bold text-white" style={{ fontFamily: 'Chivo' }}>PRECIOS DE MERCADO (30 CRIPTOMONEDAS)</h2>
+                <span className="text-xs text-zinc-400 font-mono">Actualización cada 3 segundos</span>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6 gap-3 max-h-96 overflow-y-auto">
                 {prices.map((p) => (
-                  <div key={p.symbol} className="bg-[#0A0A0A] border border-white/10 p-4 rounded-sm hover:bg-[#1A1A1D] transition-all" data-testid={`price-${p.symbol}`}>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-mono text-zinc-400">{p.symbol}</span>
-                      <span className={`text-xs font-mono ${p.change_24h >= 0 ? 'text-[#10B981]' : 'text-[#EF4444]'}`}>
+                  <div key={p.symbol} className="bg-[#0A0A0A] border border-white/10 p-3 rounded-sm hover:bg-[#1A1A1D] transition-all" data-testid={`price-${p.symbol}`}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-mono text-zinc-400 font-bold">{p.symbol.replace('USDT', '')}</span>
+                      <span className={`text-xs font-mono font-bold ${p.change_24h >= 0 ? 'text-[#10B981]' : 'text-[#EF4444]'}`}>
                         {p.change_24h >= 0 ? '+' : ''}{p.change_24h?.toFixed(2)}%
                       </span>
                     </div>
-                    <p className="text-2xl font-black text-white font-mono mt-2">${p.price?.toFixed(2)}</p>
-                    <div className="mt-2 text-xs text-zinc-400 font-mono">
-                      <div>H: ${p.high_24h?.toFixed(2)}</div>
-                      <div>L: ${p.low_24h?.toFixed(2)}</div>
+                    <p className="text-lg font-black text-white font-mono">${p.price?.toLocaleString('en-US', {maximumFractionDigits: 2})}</p>
+                    <div className="mt-1 text-xs text-zinc-500 font-mono space-y-0.5">
+                      <div className="flex justify-between">
+                        <span>H:</span>
+                        <span>${p.high_24h?.toLocaleString('en-US', {maximumFractionDigits: 2})}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>L:</span>
+                        <span>${p.low_24h?.toLocaleString('en-US', {maximumFractionDigits: 2})}</span>
+                      </div>
                     </div>
                   </div>
                 ))}
               </div>
+              {prices.length === 0 && (
+                <div className="text-center py-8 text-zinc-400 text-sm font-mono">
+                  Cargando precios de 30 criptomonedas...
+                </div>
+              )}
             </Card>
           </div>
 

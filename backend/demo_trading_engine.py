@@ -9,29 +9,98 @@ class DemoMarketData:
     """Simulate realistic crypto price movements"""
     
     def __init__(self):
+        # Initialize with realistic prices for all 30 cryptos
         self.prices = {
-            "BTCUSDT": 45000.0,
-            "ETHUSDT": 2500.0,
-            "BNBUSDT": 320.0
+            "BTCUSDT": 43000.0,
+            "ETHUSDT": 2400.0,
+            "BNBUSDT": 310.0,
+            "SOLUSDT": 98.0,
+            "XRPUSDT": 0.58,
+            "ADAUSDT": 0.52,
+            "DOGEUSDT": 0.082,
+            "MATICUSDT": 0.89,
+            "DOTUSDT": 7.2,
+            "AVAXUSDT": 36.5,
+            "SHIBUSDT": 0.000009,
+            "LINKUSDT": 14.8,
+            "ATOMUSDT": 9.8,
+            "LTCUSDT": 72.0,
+            "UNIUSDT": 6.2,
+            "ETCUSDT": 20.5,
+            "NEARUSDT": 2.1,
+            "APTUSDT": 6.8,
+            "ARBUSDT": 1.2,
+            "OPUSDT": 2.4,
+            "FILUSDT": 4.5,
+            "LDOUSDT": 2.1,
+            "INJUSDT": 22.0,
+            "SUIUSDT": 0.78,
+            "RNDRUSDT": 3.2,
+            "PEPEUSDT": 0.0000012,
+            "RUNEUSDT": 4.8,
+            "AAVEUSDT": 95.0,
+            "MKRUSDT": 1580.0,
+            "SANDUSDT": 0.48,
+            "MANAUSDT": 0.52,
+            "GRTUSDT": 0.16,
+            "ALGOUSDT": 0.19
         }
         self.volatility = {
-            "BTCUSDT": 0.015,  # 1.5% volatility
-            "ETHUSDT": 0.020,  # 2% volatility
-            "BNBUSDT": 0.025   # 2.5% volatility
+            "BTCUSDT": 0.015,
+            "ETHUSDT": 0.020,
+            "BNBUSDT": 0.025,
+            "SOLUSDT": 0.035,
+            "XRPUSDT": 0.030,
+            "ADAUSDT": 0.028,
+            "DOGEUSDT": 0.045,
+            "MATICUSDT": 0.032,
+            "DOTUSDT": 0.030,
+            "AVAXUSDT": 0.035,
+            "SHIBUSDT": 0.050,
+            "LINKUSDT": 0.028,
+            "ATOMUSDT": 0.030,
+            "LTCUSDT": 0.022,
+            "UNIUSDT": 0.032,
+            "ETCUSDT": 0.028,
+            "NEARUSDT": 0.038,
+            "APTUSDT": 0.040,
+            "ARBUSDT": 0.035,
+            "OPUSDT": 0.035,
+            "FILUSDT": 0.030,
+            "LDOUSDT": 0.035,
+            "INJUSDT": 0.038,
+            "SUIUSDT": 0.042,
+            "RNDRUSDT": 0.040,
+            "PEPEUSDT": 0.055,
+            "RUNEUSDT": 0.035,
+            "AAVEUSDT": 0.030,
+            "MKRUSDT": 0.028,
+            "SANDUSDT": 0.042,
+            "MANAUSDT": 0.040,
+            "GRTUSDT": 0.035,
+            "ALGOUSDT": 0.032
         }
     
     def get_price(self, symbol: str) -> float:
         """Get current simulated price"""
         if symbol not in self.prices:
-            return 0.0
+            # Return a default price for unknown symbols
+            logger.warning(f"Unknown symbol {symbol}, returning default price")
+            return 1.0
         
         # Simulate price movement
         current_price = self.prices[symbol]
-        volatility = self.volatility[symbol]
+        volatility = self.volatility.get(symbol, 0.025)
         
         # Random walk with drift
         change_pct = random.gauss(0, volatility)
         new_price = current_price * (1 + change_pct)
+        
+        # Ensure price doesn't go negative or too extreme
+        if new_price < current_price * 0.8:
+            new_price = current_price * 0.8
+        elif new_price > current_price * 1.2:
+            new_price = current_price * 1.2
         
         self.prices[symbol] = new_price
         return new_price
