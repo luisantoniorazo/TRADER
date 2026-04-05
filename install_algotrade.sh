@@ -60,6 +60,8 @@ cd $APP_DIR/backend
 python3 -m venv venv
 source venv/bin/activate
 pip install --upgrade pip
+# Remove emergentintegrations if present (Emergent-internal package)
+sed -i '/emergentintegrations/d' requirements.txt
 pip install -r requirements.txt
 
 cat > .env << EOF
