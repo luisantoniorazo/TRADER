@@ -90,6 +90,9 @@ class TelegramNotificationService:
 *Estado:* Activo ✅
 *Estrategia:* {strategy or 'Scalping Agresivo'}
 
+🔄 *Reinversión Automática:* 5% del saldo por trade
+💰 *Crecimiento Compuesto:* Las ganancias se reinvierten automáticamente
+
 _El bot está monitoreando el mercado y ejecutará trades automáticamente._
 """
         else:

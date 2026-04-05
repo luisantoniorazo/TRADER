@@ -46,7 +46,9 @@ bot_state = {
     "winning_trades": 0,
     "balance": 0.0,
     "last_updated": None,
-    "telegram_enabled": False
+    "telegram_enabled": False,
+    "use_percentage": True,
+    "balance_percentage": 5.0
 }
 
 # Active WebSocket connections
@@ -214,16 +216,25 @@ class TradingEngine:
             balance = await binance_client.get_asset_balance(asset="USDT")
             free_balance = float(balance["free"]) if balance else 0
             
-            if free_balance < self.config.max_trade_amount:
-                logger.warning(f"Insufficient balance: {free_balance} USDT")
+            # Calculate trade amount based on configuration
+            if self.config.use_percentage:
+                # Use percentage of total balance (compound growth)
+                trade_amount = free_balance * (self.config.balance_percentage / 100)
+                logger.info(f"Using {self.config.balance_percentage}% of balance: ${trade_amount:.2f} from ${free_balance:.2f}")
+            else:
+                # Use fixed amount
+                trade_amount = self.config.max_trade_amount
+            
+            if free_balance < trade_amount:
+                logger.warning(f"Insufficient balance: {free_balance} USDT, need: {trade_amount} USDT")
                 return
             
-            quantity = self.config.max_trade_amount / price
+            quantity = trade_amount / price
             
             # Round quantity to proper precision
             quantity = round(quantity, 6)
             
-            logger.info(f"Attempting BUY: {symbol} at {price}, quantity: {quantity}")
+            logger.info(f"Attempting BUY: {symbol} at {price}, quantity: {quantity}, amount: ${trade_amount:.2f}")
             
             # Create mock order for testing
             trade = Trade(
@@ -349,15 +360,28 @@ async def start_bot(config: BotConfig, background_tasks: BackgroundTasks):
     trading_engine = TradingEngine(config)
     bot_state["is_running"] = True
     bot_state["strategy"] = config.strategy.value
+    bot_state["use_percentage"] = config.use_percentage
+    bot_state["balance_percentage"] = config.balance_percentage if config.use_percentage else None
     
-    # Send Telegram notification
+    # Send Telegram notification with strategy details
     telegram_service = get_telegram_service()
     if telegram_service and telegram_service.enabled:
-        await telegram_service.send_bot_status_notification(True, config.strategy.value)
+        strategy_msg = f"{config.strategy.value}"
+        if config.use_percentage:
+            strategy_msg += f" - Reinversión: {config.balance_percentage}% del saldo"
+        await telegram_service.send_bot_status_notification(True, strategy_msg)
     
     background_tasks.add_task(trading_engine.run)
     
-    return {"status": "success", "message": "Trading bot started"}
+    return {
+        "status": "success", 
+        "message": "Trading bot started",
+        "config": {
+            "strategy": config.strategy.value,
+            "use_percentage": config.use_percentage,
+            "balance_percentage": config.balance_percentage if config.use_percentage else None
+        }
+    }
 
 @api_router.post("/bot/stop")
 async def stop_bot():

@@ -128,10 +128,12 @@ const Dashboard = () => {
         symbols: ["BTCUSDT", "ETHUSDT", "BNBUSDT"],
         max_trade_amount: 10.0,
         profit_target: 1.5,
-        stop_loss: 0.5
+        stop_loss: 0.5,
+        use_percentage: true,
+        balance_percentage: 5.0
       });
       
-      toast.success("Bot de trading iniciado");
+      toast.success("Bot de trading iniciado con reinversión automática del 5%");
       fetchBotStatus();
     } catch (error) {
       toast.error("Error al iniciar bot: " + error.response?.data?.detail);
