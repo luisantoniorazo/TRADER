@@ -147,7 +147,7 @@ class DemoMarketData:
 class DemoAccount:
     """Simulate a Binance account with persistent balance"""
     
-    def __init__(self, initial_balance: float = 1000.0, db_client = None):
+    def __init__(self, initial_balance=1000.0, db_client=None):
         self.db = db_client
         self.balances = {
             "USDT": {"free": initial_balance, "locked": 0.0},
@@ -274,9 +274,10 @@ class DemoAccount:
 class DemoBinanceClient:
     """Demo client that mimics Binance AsyncClient API"""
     
-    def __init__(self, api_key: str = None, api_secret: str = None):
+    def __init__(self, api_key=None, api_secret=None, db_client=None):
         self.market_data = DemoMarketData()
-        self.account = DemoAccount(initial_balance=1000.0)
+        self.account = DemoAccount(initial_balance=1000.0, db_client=db_client)
+        self.db = db_client
         logger.info("🎮 DEMO MODE: Binance client initialized with simulated trading")
     
     async def close_connection(self):
