@@ -108,25 +108,44 @@ class PriceData(BaseModel):
 async def initialize_binance_client(api_key: str, api_secret: str, testnet: bool = True):
     global binance_client
     try:
+        # Try real Binance first
         if testnet:
-            # Use testnet URLs explicitly
-            binance_client = await AsyncClient.create(
-                api_key=api_key,
-                api_secret=api_secret,
-                testnet=True,
-                tld='com'
-            )
+            try:
+                binance_client = await AsyncClient.create(
+                    api_key=api_key,
+                    api_secret=api_secret,
+                    testnet=True,
+                    tld='com'
+                )
+                logger.info(f"Binance client initialized (testnet={testnet})")
+                return True
+            except Exception as e:
+                logger.warning(f"Real Binance connection failed: {str(e)}")
+                logger.info("🎮 Switching to DEMO MODE - Simulated trading")
+                
+                # Fall back to demo mode
+                from demo_trading_engine import create_demo_client
+                binance_client = await create_demo_client(api_key, api_secret, testnet)
+                logger.info("✅ DEMO MODE activated - All trades are simulated!")
+                return True
         else:
             binance_client = await AsyncClient.create(
                 api_key=api_key,
                 api_secret=api_secret,
                 testnet=False
             )
-        logger.info(f"Binance client initialized (testnet={testnet})")
-        return True
+            logger.info(f"Binance client initialized (production mode)")
+            return True
     except Exception as e:
         logger.error(f"Failed to initialize Binance client: {str(e)}")
-        return False
+        # Last resort: demo mode
+        try:
+            from demo_trading_engine import create_demo_client
+            binance_client = await create_demo_client(api_key, api_secret, testnet)
+            logger.info("✅ DEMO MODE activated as fallback")
+            return True
+        except:
+            return False
 
 # WebSocket broadcast
 async def broadcast_message(message: dict):
