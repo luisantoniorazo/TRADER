@@ -526,15 +526,15 @@ async def get_bot_status():
 
 @api_router.get("/market/prices")
 async def get_market_prices(symbols: str = "BTCUSDT,ETHUSDT,BNBUSDT"):
-    """Get current market prices"""
+    """Get current market prices - skips symbols not available on testnet"""
     if not binance_client:
         raise HTTPException(status_code=400, detail="Binance client not initialized")
     
-    try:
-        symbol_list = symbols.split(",")
-        prices = []
-        
-        for symbol in symbol_list:
+    symbol_list = symbols.split(",")
+    prices = []
+    
+    for symbol in symbol_list:
+        try:
             ticker = await binance_client.get_ticker(symbol=symbol)
             prices.append({
                 "symbol": symbol,
@@ -544,11 +544,10 @@ async def get_market_prices(symbols: str = "BTCUSDT,ETHUSDT,BNBUSDT"):
                 "high_24h": float(ticker["highPrice"]),
                 "low_24h": float(ticker["lowPrice"])
             })
-        
-        return prices
-    except Exception as e:
-        logger.error(f"Error fetching prices: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        except Exception as e:
+            logger.debug(f"Symbol {symbol} not available: {e}")
+    
+    return prices
 
 @api_router.get("/account/balance")
 async def get_account_balance():
