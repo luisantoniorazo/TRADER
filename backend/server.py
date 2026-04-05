@@ -219,33 +219,45 @@ class TradingEngine:
             
             logger.info(f"📊 {symbol}: Price=${price:.2f}, RSI={rsi:.2f}")
             
-            # Aggressive scalping strategy
+            # Strategy-specific RSI thresholds
             if self.config.strategy == TradingStrategy.AGGRESSIVE_SCALPING:
-                # Buy signal: RSI < 35 (oversold)
-                if rsi < 35 and symbol not in self.active_positions:
-                    logger.info(f"🟢 BUY SIGNAL for {symbol}: RSI={rsi:.2f} < 35 (oversold)")
-                    await self.execute_buy(symbol, price)
-                elif symbol not in self.active_positions:
-                    logger.info(f"⏸️  No buy signal for {symbol}: RSI={rsi:.2f} (waiting for < 35)")
+                buy_rsi = 35
+                sell_rsi = 65
+            elif self.config.strategy == TradingStrategy.SWING_TRADING:
+                buy_rsi = 25
+                sell_rsi = 75
+            elif self.config.strategy == TradingStrategy.DAY_TRADING:
+                buy_rsi = 45
+                sell_rsi = 55
+            else:
+                buy_rsi = 35
+                sell_rsi = 65
+
+            # Buy signal: RSI below threshold (oversold)
+            if rsi < buy_rsi and symbol not in self.active_positions:
+                logger.info(f"BUY SIGNAL for {symbol}: RSI={rsi:.2f} < {buy_rsi}")
+                await self.execute_buy(symbol, price)
+            elif symbol not in self.active_positions:
+                logger.info(f"No buy signal for {symbol}: RSI={rsi:.2f} (waiting for < {buy_rsi})")
+            
+            # Sell signal: RSI above threshold or take profit/stop loss
+            elif symbol in self.active_positions:
+                position = self.active_positions[symbol]
+                profit_pct = ((price - position.entry_price) / position.entry_price) * 100
                 
-                # Sell signal: RSI > 65 (overbought) or take profit
-                elif symbol in self.active_positions:
-                    position = self.active_positions[symbol]
-                    profit_pct = ((price - position.entry_price) / position.entry_price) * 100
-                    
-                    logger.info(f"📊 Position {symbol}: Entry=${position.entry_price:.2f}, Current=${price:.2f}, Profit={profit_pct:.2f}%")
-                    
-                    if profit_pct >= self.config.profit_target:
-                        logger.info(f"💰 SELL SIGNAL for {symbol}: Profit target reached {profit_pct:.2f}% >= {self.config.profit_target}%")
-                        await self.execute_sell(symbol, price, profit_pct)
-                    elif profit_pct <= -self.config.stop_loss:
-                        logger.info(f"🛑 SELL SIGNAL for {symbol}: Stop loss triggered {profit_pct:.2f}% <= -{self.config.stop_loss}%")
-                        await self.execute_sell(symbol, price, profit_pct)
-                    elif rsi > 65:
-                        logger.info(f"🔴 SELL SIGNAL for {symbol}: RSI={rsi:.2f} > 65 (overbought)")
-                        await self.execute_sell(symbol, price, profit_pct)
-                    else:
-                        logger.info(f"⏳ Holding {symbol}: Waiting for signal (RSI={rsi:.2f}, Profit={profit_pct:.2f}%)")
+                logger.info(f"Position {symbol}: Entry=${position.entry_price:.2f}, Current=${price:.2f}, Profit={profit_pct:.2f}%")
+                
+                if profit_pct >= self.config.profit_target:
+                    logger.info(f"SELL SIGNAL for {symbol}: Profit target reached {profit_pct:.2f}% >= {self.config.profit_target}%")
+                    await self.execute_sell(symbol, price, profit_pct)
+                elif profit_pct <= -self.config.stop_loss:
+                    logger.info(f"SELL SIGNAL for {symbol}: Stop loss triggered {profit_pct:.2f}% <= -{self.config.stop_loss}%")
+                    await self.execute_sell(symbol, price, profit_pct)
+                elif rsi > sell_rsi:
+                    logger.info(f"SELL SIGNAL for {symbol}: RSI={rsi:.2f} > {sell_rsi}")
+                    await self.execute_sell(symbol, price, profit_pct)
+                else:
+                    logger.info(f"Holding {symbol}: Waiting for signal (RSI={rsi:.2f}, Profit={profit_pct:.2f}%)")
         
         except Exception as e:
             logger.error(f"❌ Error in analyze_and_trade for {symbol}: {str(e)}")

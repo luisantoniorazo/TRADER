@@ -26,7 +26,83 @@ const Dashboard = () => {
   const [balance, setBalance] = useState([]);
   const [trades, setTrades] = useState([]);
   const [dailyStats, setDailyStats] = useState(null);
+  const [selectedStrategy, setSelectedStrategy] = useState("aggressive_scalping");
   const wsRef = useRef(null);
+
+  const STRATEGIES = {
+    conservative: {
+      id: "swing_trading",
+      name: "Conservador",
+      color: "#3B82F6",
+      borderColor: "border-blue-500/50",
+      bgColor: "bg-blue-500/10",
+      riskLabel: "Riesgo Bajo",
+      description: "Espera senales fuertes antes de entrar. Menos operaciones pero mas seguras.",
+      details: [
+        "RSI < 25 para comprar (sobrevendido fuerte)",
+        "RSI > 75 para vender (sobrecomprado fuerte)",
+        "2% del saldo por operacion",
+        "Target de ganancia: 3%",
+        "Stop loss: 1.5%",
+        "Menos trades, mayor precision"
+      ],
+      config: {
+        strategy: "swing_trading",
+        profit_target: 3.0,
+        stop_loss: 1.5,
+        use_percentage: true,
+        balance_percentage: 2.0
+      }
+    },
+    moderate: {
+      id: "aggressive_scalping",
+      name: "Moderado",
+      color: "#F59E0B",
+      borderColor: "border-yellow-500/50",
+      bgColor: "bg-yellow-500/10",
+      riskLabel: "Riesgo Medio",
+      description: "Equilibrio entre frecuencia y seguridad. La estrategia actual.",
+      details: [
+        "RSI < 35 para comprar (sobrevendido)",
+        "RSI > 65 para vender (sobrecomprado)",
+        "5% del saldo por operacion",
+        "Target de ganancia: 1.5%",
+        "Stop loss: 0.5%",
+        "Operaciones frecuentes con reinversion"
+      ],
+      config: {
+        strategy: "aggressive_scalping",
+        profit_target: 1.5,
+        stop_loss: 0.5,
+        use_percentage: true,
+        balance_percentage: 5.0
+      }
+    },
+    aggressive: {
+      id: "day_trading",
+      name: "Agresivo",
+      color: "#EF4444",
+      borderColor: "border-red-500/50",
+      bgColor: "bg-red-500/10",
+      riskLabel: "Riesgo Alto",
+      description: "Maximo numero de operaciones. Mayor potencial pero mayor riesgo de perdida.",
+      details: [
+        "RSI < 45 para comprar (senal rapida)",
+        "RSI > 55 para vender (salida rapida)",
+        "10% del saldo por operacion",
+        "Target de ganancia: 0.8%",
+        "Stop loss: 0.3%",
+        "ADVERTENCIA: Alto riesgo de perdidas rapidas"
+      ],
+      config: {
+        strategy: "day_trading",
+        profit_target: 0.8,
+        stop_loss: 0.3,
+        use_percentage: true,
+        balance_percentage: 10.0
+      }
+    }
+  };
 
     useEffect(() => {
     // Check if config already exists (e.g. after page refresh)
@@ -159,33 +235,34 @@ const Dashboard = () => {
   };
 
   const handleStartBot = async () => {
+    const strategyKey = Object.keys(STRATEGIES).find(k => STRATEGIES[k].id === selectedStrategy) || "moderate";
+    const strat = STRATEGIES[strategyKey];
+    
     try {
+      const symbols = [
+        "BTCUSDT", "ETHUSDT", "BNBUSDT",
+        "SOLUSDT", "XRPUSDT", "ADAUSDT",
+        "DOGEUSDT", "MATICUSDT", "DOTUSDT",
+        "AVAXUSDT", "SHIBUSDT", "LINKUSDT",
+        "ATOMUSDT", "LTCUSDT", "UNIUSDT",
+        "ETCUSDT", "NEARUSDT", "APTUSDT",
+        "ARBUSDT", "OPUSDT", "FILUSDT",
+        "LDOUSDT", "INJUSDT", "SUIUSDT",
+        "RNDRUSDT", "PEPEUSDT", "RUNEUSDT",
+        "AAVEUSDT", "MKRUSDT", "SANDUSDT",
+        "MANAUSDT", "GRTUSDT", "ALGOUSDT"
+      ];
+
       const response = await axios.post(`${API}/bot/start`, {
-        strategy: "aggressive_scalping",
-        symbols: [
-          "BTCUSDT", "ETHUSDT", "BNBUSDT",      // Top 3
-          "SOLUSDT", "XRPUSDT", "ADAUSDT",      // Top DeFi
-          "DOGEUSDT", "MATICUSDT", "DOTUSDT",   // Popular Altcoins
-          "AVAXUSDT", "SHIBUSDT", "LINKUSDT",   // DeFi & Meme
-          "ATOMUSDT", "LTCUSDT", "UNIUSDT",     // Established
-          "ETCUSDT", "NEARUSDT", "APTUSDT",     // Layer 1s
-          "ARBUSDT", "OPUSDT", "FILUSDT",       // L2 & Storage
-          "LDOUSDT", "INJUSDT", "SUIUSDT",      // Newer Trending
-          "RNDRUSDT", "PEPEUSDT", "RUNEUSDT",   // AI & Meme
-          "AAVEUSDT", "MKRUSDT", "SANDUSDT",    // DeFi & Metaverse
-          "MANAUSDT", "GRTUSDT", "ALGOUSDT"     // Gaming & Infrastructure
-        ],
-        max_trade_amount: 10.0,
-        profit_target: 1.5,
-        stop_loss: 0.5,
-        use_percentage: true,
-        balance_percentage: 5.0
+        ...strat.config,
+        symbols,
+        max_trade_amount: 10.0
       });
       
-      toast.success("Bot iniciado con 30 criptomonedas - Reinversión 5%");
+      toast.success(`Bot iniciado - Estrategia: ${strat.name}`);
       fetchBotStatus();
     } catch (error) {
-      toast.error("Error al iniciar bot: " + error.response?.data?.detail);
+      toast.error("Error al iniciar bot: " + (error.response?.data?.detail || error.message));
     }
   };
 
@@ -343,6 +420,63 @@ const Dashboard = () => {
           </div>
         </div>
       </div>
+
+      {/* Strategy Selector - only show when bot is stopped */}
+      {!botStatus?.is_running && (
+        <div className="px-6 pt-4">
+          <Card className="bg-[#0F0F11] border border-white/10 p-6" data-testid="strategy-selector">
+            <h2 className="text-lg font-bold text-white mb-1" style={{ fontFamily: 'Chivo' }}>ESTRATEGIA DE TRADING</h2>
+            <p className="text-xs text-zinc-500 font-mono mb-4">Selecciona tu perfil de riesgo antes de iniciar el bot</p>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {Object.entries(STRATEGIES).map(([key, strat]) => (
+                <div
+                  key={key}
+                  onClick={() => setSelectedStrategy(strat.id)}
+                  className={`cursor-pointer border rounded-sm p-5 transition-all ${
+                    selectedStrategy === strat.id 
+                      ? `${strat.borderColor} ${strat.bgColor} border-2` 
+                      : 'border-white/10 hover:border-white/20 bg-[#0A0A0A]'
+                  }`}
+                  data-testid={`strategy-${key}`}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-base font-bold text-white" style={{ fontFamily: 'Chivo' }}>{strat.name}</span>
+                    <span 
+                      className="text-xs font-mono px-2 py-1 rounded-sm"
+                      style={{ backgroundColor: `${strat.color}20`, color: strat.color }}
+                    >
+                      {strat.riskLabel}
+                    </span>
+                  </div>
+                  
+                  <p className="text-xs text-zinc-400 mb-3" style={{ fontFamily: 'IBM Plex Sans' }}>
+                    {strat.description}
+                  </p>
+                  
+                  <div className="space-y-1.5">
+                    {strat.details.map((detail, i) => (
+                      <div key={i} className={`text-xs font-mono ${
+                        detail.startsWith("ADVERTENCIA") ? "text-red-400 font-bold" : "text-zinc-500"
+                      }`}>
+                        {detail.startsWith("ADVERTENCIA") ? "⚠ " : "- "}{detail}
+                      </div>
+                    ))}
+                  </div>
+                  
+                  {selectedStrategy === strat.id && (
+                    <div className="mt-3 text-xs font-mono text-center py-1.5 rounded-sm"
+                      style={{ backgroundColor: `${strat.color}30`, color: strat.color }}
+                    >
+                      SELECCIONADO
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </Card>
+        </div>
+      )}
 
       {/* Main Content */}
       <div className="p-6">
