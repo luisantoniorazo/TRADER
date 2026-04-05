@@ -69,6 +69,8 @@ class TelegramNotificationService:
             exit_price = trade.get("exit_price", 0)
             pl = trade.get("profit_loss", 0)
             pl_pct = ((exit_price - entry_price) / entry_price * 100) if entry_price > 0 else 0
+            total_invertido = entry_price * qty
+            total_retirado = exit_price * qty
             icon = "💰" if pl > 0 else "📉"
             result = "GANANCIA" if pl > 0 else "PERDIDA"
             msg = (
@@ -78,6 +80,8 @@ class TelegramNotificationService:
                 f"Precio Entrada: ${entry_price:.4f}\n"
                 f"Precio Salida: ${exit_price:.4f}\n"
                 f"Cantidad: {qty:.6f}\n\n"
+                f"💵 Invertido: ${total_invertido:.2f} USDT\n"
+                f"💵 Retirado: ${total_retirado:.2f} USDT\n\n"
                 f"{icon} <b>Resultado: {result}</b>\n"
                 f"P&L: ${pl:+.2f} ({pl_pct:+.2f}%)\n\n"
                 f"Estado: Posicion CERRADA\n"
