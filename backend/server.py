@@ -252,8 +252,53 @@ class TradingEngine:
             import traceback
             logger.error(traceback.format_exc())
     
+    async def get_symbol_precision(self, symbol: str):
+        """Get lot size precision for a symbol from Binance"""
+        try:
+            info = await binance_client.get_symbol_info(symbol)
+            if not info:
+                return None
+            
+            step_size = "0.00001"
+            min_qty = "0.00001"
+            min_notional = "10.0"
+            
+            for f in info.get("filters", []):
+                if f["filterType"] == "LOT_SIZE":
+                    step_size = f["stepSize"]
+                    min_qty = f["minQty"]
+                elif f["filterType"] == "MARKET_LOT_SIZE":
+                    if float(f["stepSize"]) > 0:
+                        step_size = f["stepSize"]
+                    min_qty = f["minQty"]
+                elif f["filterType"] in ("MIN_NOTIONAL", "NOTIONAL"):
+                    min_notional = f.get("minNotional", "10.0")
+            
+            # Calculate precision from step_size
+            step = float(step_size)
+            if step > 0:
+                precision = max(0, len(step_size.rstrip('0').split('.')[-1]))
+            else:
+                precision = info.get("baseAssetPrecision", 6)
+            
+            return {
+                "precision": precision,
+                "step_size": float(step_size),
+                "min_qty": float(min_qty),
+                "min_notional": float(min_notional)
+            }
+        except Exception as e:
+            logger.error(f"Error getting symbol precision for {symbol}: {e}")
+            return None
+
+    def round_to_precision(self, quantity: float, precision: int, step_size: float) -> float:
+        """Round quantity to valid lot size"""
+        if step_size > 0:
+            quantity = quantity - (quantity % step_size)
+        return round(quantity, precision)
+
     async def execute_buy(self, symbol: str, price: float):
-        """Execute buy order"""
+        """Execute buy order - only records trade if Binance order succeeds"""
         try:
             # Get account balance
             balance = await binance_client.get_asset_balance(asset="USDT")
@@ -261,91 +306,134 @@ class TradingEngine:
             
             # Calculate trade amount based on configuration
             if self.config.use_percentage:
-                # Use percentage of total balance (compound growth)
                 trade_amount = free_balance * (self.config.balance_percentage / 100)
                 logger.info(f"Using {self.config.balance_percentage}% of balance: ${trade_amount:.2f} from ${free_balance:.2f}")
             else:
-                # Use fixed amount
                 trade_amount = self.config.max_trade_amount
             
             if free_balance < trade_amount:
                 logger.warning(f"Insufficient balance: {free_balance} USDT, need: {trade_amount} USDT")
                 return
             
+            # Get symbol precision and filters
+            sym_info = await self.get_symbol_precision(symbol)
+            if not sym_info:
+                logger.warning(f"Cannot get filters for {symbol}, skipping")
+                return
+            
             quantity = trade_amount / price
+            quantity = self.round_to_precision(quantity, sym_info["precision"], sym_info["step_size"])
             
-            # Round quantity to proper precision
-            quantity = round(quantity, 6)
+            # Check minimum quantity and notional
+            if quantity < sym_info["min_qty"]:
+                logger.warning(f"{symbol}: quantity {quantity} < min {sym_info['min_qty']}, skipping")
+                return
+            if quantity * price < sym_info["min_notional"]:
+                logger.warning(f"{symbol}: notional ${quantity * price:.2f} < min ${sym_info['min_notional']}, skipping")
+                return
             
-            logger.info(f"Attempting BUY: {symbol} at {price}, quantity: {quantity}, amount: ${trade_amount:.2f}")
+            logger.info(f"Executing BUY: {symbol} qty={quantity} at ${price:.2f} (${trade_amount:.2f})")
             
-            # Create mock order for testing
+            # Execute REAL order on Binance FIRST
+            order_result = await binance_client.create_order(
+                symbol=symbol,
+                side="BUY",
+                type="MARKET",
+                quantity=quantity
+            )
+            
+            order_status = order_result.get("status", "UNKNOWN")
+            logger.info(f"BUY order result: {order_status} - {order_result.get('orderId', 'N/A')}")
+            
+            if order_status not in ("FILLED", "PARTIALLY_FILLED"):
+                logger.warning(f"Order not filled: {order_status}")
+                return
+            
+            # Get actual fill price from order
+            fills = order_result.get("fills", [])
+            if fills:
+                filled_price = sum(float(f["price"]) * float(f["qty"]) for f in fills) / sum(float(f["qty"]) for f in fills)
+                filled_qty = sum(float(f["qty"]) for f in fills)
+            else:
+                filled_price = price
+                filled_qty = quantity
+            
+            # NOW record the trade (only after success)
             trade = Trade(
                 symbol=symbol,
                 side="BUY",
-                entry_price=price,
-                quantity=quantity,
+                entry_price=filled_price,
+                quantity=filled_qty,
                 status="open"
             )
             
             self.active_positions[symbol] = trade
             
-            # Execute the trade in demo account to update balance
-            try:
-                order_result = await binance_client.create_order(
-                    symbol=symbol,
-                    side="BUY",
-                    type="MARKET",
-                    quantity=quantity
-                )
-                logger.info(f"📝 Order result: {order_result.get('status', 'UNKNOWN')}")
-            except Exception as e:
-                logger.error(f"Error executing order: {str(e)}")
-            
-            # Save to database
             trade_dict = trade.model_dump()
             trade_dict["timestamp"] = trade_dict["timestamp"].isoformat()
             await db.trades.insert_one(trade_dict)
             
-            # Update bot state
             bot_state["total_trades"] += 1
-            await broadcast_message({"type": "trade", "data": trade_dict})
             
-            logger.info(f"BUY order executed: {symbol} at {price}")
+            # Send Telegram notification for buy
+            telegram_service = get_telegram_service()
+            if telegram_service and telegram_service.enabled:
+                await telegram_service.send_trade_notification(trade_dict)
+            
+            await broadcast_message({"type": "trade", "data": trade_dict})
+            logger.info(f"BUY executed: {symbol} {filled_qty} @ ${filled_price:.2f}")
         
         except Exception as e:
-            logger.error(f"Error executing buy: {str(e)}")
+            logger.error(f"BUY failed for {symbol}: {str(e)}")
     
     async def execute_sell(self, symbol: str, price: float, profit_pct: float):
-        """Execute sell order"""
+        """Execute sell order - only records if Binance order succeeds"""
         try:
             if symbol not in self.active_positions:
                 return
             
             position = self.active_positions[symbol]
-            position.exit_price = price
-            position.profit_loss = (price - position.entry_price) * position.quantity
+            
+            # Get symbol precision for proper rounding
+            sym_info = await self.get_symbol_precision(symbol)
+            sell_qty = position.quantity
+            if sym_info:
+                sell_qty = self.round_to_precision(sell_qty, sym_info["precision"], sym_info["step_size"])
+            
+            logger.info(f"Executing SELL: {symbol} qty={sell_qty} at ${price:.2f}")
+            
+            # Execute REAL order on Binance FIRST
+            order_result = await binance_client.create_order(
+                symbol=symbol,
+                side="SELL",
+                type="MARKET",
+                quantity=sell_qty
+            )
+            
+            order_status = order_result.get("status", "UNKNOWN")
+            logger.info(f"SELL order result: {order_status} - {order_result.get('orderId', 'N/A')}")
+            
+            if order_status not in ("FILLED", "PARTIALLY_FILLED"):
+                logger.warning(f"Sell order not filled: {order_status}")
+                return
+            
+            # Get actual fill price
+            fills = order_result.get("fills", [])
+            if fills:
+                filled_price = sum(float(f["price"]) * float(f["qty"]) for f in fills) / sum(float(f["qty"]) for f in fills)
+            else:
+                filled_price = price
+            
+            # Update position with real data
+            position.exit_price = filled_price
+            position.profit_loss = (filled_price - position.entry_price) * position.quantity
             position.status = "closed"
-            
-            logger.info(f"Attempting SELL: {symbol} at {price}, profit: {position.profit_loss}")
-            
-            # Execute the sell order in demo account to update balance
-            try:
-                order_result = await binance_client.create_order(
-                    symbol=symbol,
-                    side="SELL",
-                    type="MARKET",
-                    quantity=position.quantity
-                )
-                logger.info(f"📝 Sell order result: {order_result.get('status', 'UNKNOWN')}")
-            except Exception as e:
-                logger.error(f"Error executing sell order: {str(e)}")
             
             # Update in database
             await db.trades.update_one(
                 {"id": position.id},
                 {"$set": {
-                    "exit_price": price,
+                    "exit_price": filled_price,
                     "profit_loss": position.profit_loss,
                     "status": "closed"
                 }}
@@ -366,10 +454,10 @@ class TradingEngine:
             
             del self.active_positions[symbol]
             
-            logger.info(f"SELL order executed: {symbol} at {price}, profit: {position.profit_loss}")
+            logger.info(f"SELL executed: {symbol} @ ${filled_price:.2f}, P&L: ${position.profit_loss:.2f}")
         
         except Exception as e:
-            logger.error(f"Error executing sell: {str(e)}")
+            logger.error(f"SELL failed for {symbol}: {str(e)}")
     
     async def run(self):
         """Main trading loop"""
