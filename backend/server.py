@@ -80,7 +80,19 @@ class ApiKeysInput(BaseModel):
 
 class BotConfig(BaseModel):
     strategy: TradingStrategy
-    symbols: List[str] = ["BTCUSDT", "ETHUSDT", "BNBUSDT"]
+    symbols: List[str] = [
+        "BTCUSDT", "ETHUSDT", "BNBUSDT",      # Top 3
+        "SOLUSDT", "XRPUSDT", "ADAUSDT",      # Top DeFi
+        "DOGEUSDT", "MATICUSDT", "DOTUSDT",   # Popular Altcoins
+        "AVAXUSDT", "SHIBUSDT", "LINKUSDT",   # DeFi & Meme
+        "ATOMUSDT", "LTCUSDT", "UNIUSDT",     # Established
+        "ETCUSDT", "NEARUSDT", "APTUSDT",     # Layer 1s
+        "ARBUSDT", "OPUSDT", "FILUSDT",       # L2 & Storage
+        "LDOUSDT", "INJUSDT", "SUIUSDT",      # Newer Trending
+        "RNDRUSDT", "PEPEUSDT", "RUNEUSDT",   # AI & Meme
+        "AAVEUSDT", "MKRUSDT", "SANDUSDT",    # DeFi & Metaverse
+        "MANAUSDT", "GRTUSDT", "ALGOUSDT"     # Gaming & Infrastructure
+    ]
     max_trade_amount: float = 10.0
     profit_target: float = 1.5
     stop_loss: float = 0.5

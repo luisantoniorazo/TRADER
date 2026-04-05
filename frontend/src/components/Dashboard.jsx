@@ -125,7 +125,19 @@ const Dashboard = () => {
     try {
       const response = await axios.post(`${API}/bot/start`, {
         strategy: "aggressive_scalping",
-        symbols: ["BTCUSDT", "ETHUSDT", "BNBUSDT"],
+        symbols: [
+          "BTCUSDT", "ETHUSDT", "BNBUSDT",      // Top 3
+          "SOLUSDT", "XRPUSDT", "ADAUSDT",      // Top DeFi
+          "DOGEUSDT", "MATICUSDT", "DOTUSDT",   // Popular Altcoins
+          "AVAXUSDT", "SHIBUSDT", "LINKUSDT",   // DeFi & Meme
+          "ATOMUSDT", "LTCUSDT", "UNIUSDT",     // Established
+          "ETCUSDT", "NEARUSDT", "APTUSDT",     // Layer 1s
+          "ARBUSDT", "OPUSDT", "FILUSDT",       // L2 & Storage
+          "LDOUSDT", "INJUSDT", "SUIUSDT",      // Newer Trending
+          "RNDRUSDT", "PEPEUSDT", "RUNEUSDT",   // AI & Meme
+          "AAVEUSDT", "MKRUSDT", "SANDUSDT",    // DeFi & Metaverse
+          "MANAUSDT", "GRTUSDT", "ALGOUSDT"     // Gaming & Infrastructure
+        ],
         max_trade_amount: 10.0,
         profit_target: 1.5,
         stop_loss: 0.5,
@@ -133,7 +145,7 @@ const Dashboard = () => {
         balance_percentage: 5.0
       });
       
-      toast.success("Bot de trading iniciado con reinversión automática del 5%");
+      toast.success("Bot iniciado con 30 criptomonedas - Reinversión 5%");
       fetchBotStatus();
     } catch (error) {
       toast.error("Error al iniciar bot: " + error.response?.data?.detail);
