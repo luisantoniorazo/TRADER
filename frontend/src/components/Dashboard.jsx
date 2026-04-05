@@ -29,6 +29,21 @@ const Dashboard = () => {
   const wsRef = useRef(null);
 
     useEffect(() => {
+    // Check if config already exists (e.g. after page refresh)
+    const checkExistingConfig = async () => {
+      try {
+        const resp = await axios.get(`${API}/config/status`);
+        if (resp.data.configured) {
+          setIsConfigured(true);
+        }
+      } catch (err) {
+        // No config saved yet
+      }
+    };
+    checkExistingConfig();
+  }, []);
+
+    useEffect(() => {
     fetchBotStatus();
     const interval = setInterval(() => {
       if (isConfigured) {
@@ -121,17 +136,25 @@ const Dashboard = () => {
       }
       
       const response = await axios.post(`${API}/setup`, payload);
+      const data = response.data;
+
+      if (data.binance_connected) {
+        toast.success("Binance conectado correctamente");
+      } else if (data.geo_restricted) {
+        toast.warning("Config guardada. Binance bloqueado desde este servidor - funcionara al desplegar en otra ubicacion.");
+      } else {
+        toast.warning("Config guardada. " + data.message);
+      }
+
+      if (data.telegram_enabled) {
+        toast.success("Telegram configurado - revisa tu chat!");
+      }
       
-      const successMsg = response.data.telegram_enabled 
-        ? "API Keys y Telegram configurados correctamente" 
-        : "API Keys configuradas correctamente";
-      
-      toast.success(successMsg);
       setIsConfigured(true);
       fetchPrices();
       fetchBalance();
     } catch (error) {
-      toast.error("Error al configurar: " + error.response?.data?.detail);
+      toast.error("Error al configurar: " + (error.response?.data?.detail || error.message));
     }
   };
 

@@ -118,48 +118,29 @@ class PriceData(BaseModel):
     volume_24h: float
     timestamp: datetime
 
-# Initialize Binance client
+# Initialize Binance client - REAL only, NO demo fallback
 async def initialize_binance_client(api_key: str, api_secret: str, testnet: bool = True):
     global binance_client
     try:
-        # Try real Binance first
-        if testnet:
-            try:
-                binance_client = await AsyncClient.create(
-                    api_key=api_key,
-                    api_secret=api_secret,
-                    testnet=True,
-                    tld='com'
-                )
-                logger.info(f"Binance client initialized (testnet={testnet})")
-                return True
-            except Exception as e:
-                logger.warning(f"Real Binance connection failed: {str(e)}")
-                logger.info("🎮 Switching to DEMO MODE - Simulated trading")
-                
-                # Fall back to demo mode
-                from demo_trading_engine import create_demo_client
-                binance_client = await create_demo_client(api_key, api_secret, testnet, db)
-                logger.info("✅ DEMO MODE activated - All trades are simulated!")
-                return True
-        else:
-            binance_client = await AsyncClient.create(
-                api_key=api_key,
-                api_secret=api_secret,
-                testnet=False
-            )
-            logger.info(f"Binance client initialized (production mode)")
-            return True
+        binance_client = await AsyncClient.create(
+            api_key=api_key,
+            api_secret=api_secret,
+            testnet=testnet
+        )
+        await binance_client.ping()
+        logger.info(f"Binance client connected (testnet={testnet})")
+        return {"success": True, "message": "Conectado a Binance"}
     except Exception as e:
-        logger.error(f"Failed to initialize Binance client: {str(e)}")
-        # Last resort: demo mode
-        try:
-            from demo_trading_engine import create_demo_client
-            binance_client = await create_demo_client(api_key, api_secret, testnet, db)
-            logger.info("✅ DEMO MODE activated as fallback")
-            return True
-        except:
-            return False
+        binance_client = None
+        error_msg = str(e)
+        logger.error(f"Binance connection failed: {error_msg}")
+        if "restricted location" in error_msg.lower():
+            return {
+                "success": False,
+                "geo_restricted": True,
+                "message": "Binance no disponible desde esta ubicacion. Despliega la app en un servidor sin restricciones geograficas."
+            }
+        return {"success": False, "geo_restricted": False, "message": f"Error: {error_msg}"}
 
 # WebSocket broadcast
 async def broadcast_message(message: dict):
@@ -167,7 +148,7 @@ async def broadcast_message(message: dict):
     for connection in active_connections:
         try:
             await connection.send_json(message)
-        except:
+        except Exception:
             disconnected.append(connection)
     
     for conn in disconnected:
@@ -393,7 +374,7 @@ class TradingEngine:
     async def run(self):
         """Main trading loop"""
         self.is_running = True
-        logger.info("🚀 Trading bot started - DEMO MODE")
+        logger.info("🚀 Trading bot started")
         logger.info(f"📊 Strategy: {self.config.strategy.value}")
         logger.info(f"💰 Reinvestment: {self.config.balance_percentage}% per trade")
         logger.info(f"🎯 Symbols: {', '.join(self.config.symbols)}")
@@ -419,7 +400,7 @@ class TradingEngine:
                 bot_state["last_updated"] = datetime.now(timezone.utc).isoformat()
                 await broadcast_message({"type": "bot_state", "data": bot_state})
                 
-                logger.info(f"⏳ Waiting 5 seconds before next check...")
+                logger.info("Waiting 5 seconds before next check...")
                 await asyncio.sleep(5)  # Check every 5 seconds
             
             except Exception as e:
@@ -437,12 +418,54 @@ trading_engine: Optional[TradingEngine] = None
 
 # API Endpoints
 @api_router.post("/setup")
-async def setup_api_keys(keys: ApiKeysInput, background_tasks: BackgroundTasks):
-    """Setup Binance API keys"""
-    success = await initialize_binance_client(keys.api_key, keys.api_secret, keys.testnet)
-    if success:
-        return {"status": "success", "message": "API keys configured successfully"}
-    raise HTTPException(status_code=400, detail="Failed to initialize Binance client")
+async def setup_api_keys(keys: ApiKeysInput):
+    """Setup Binance API keys + optional Telegram. Saves config to MongoDB."""
+    # Persist config so it survives restarts
+    config_data = {
+        "type": "main",
+        "api_key": keys.api_key,
+        "api_secret": keys.api_secret,
+        "testnet": keys.testnet,
+        "telegram_bot_token": keys.telegram_bot_token or "",
+        "telegram_chat_id": keys.telegram_chat_id or "",
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.config.update_one({"type": "main"}, {"$set": config_data}, upsert=True)
+    logger.info("Config saved to MongoDB")
+
+    # Initialize Binance
+    binance_result = await initialize_binance_client(keys.api_key, keys.api_secret, keys.testnet)
+
+    # Initialize Telegram if credentials provided
+    telegram_enabled = False
+    if keys.telegram_bot_token and keys.telegram_chat_id:
+        initialize_telegram_service(keys.telegram_bot_token, keys.telegram_chat_id)
+        tg = get_telegram_service()
+        if tg:
+            sent = await tg.send_message("✅ <b>AlgoTrade X Configurado</b>\n\nBot listo para enviarte notificaciones de trading.")
+            telegram_enabled = sent
+            bot_state["telegram_enabled"] = sent
+
+    return {
+        "status": "success" if binance_result["success"] else "partial",
+        "message": binance_result["message"],
+        "binance_connected": binance_result["success"],
+        "geo_restricted": binance_result.get("geo_restricted", False),
+        "telegram_enabled": telegram_enabled,
+        "config_saved": True
+    }
+
+@api_router.get("/config/status")
+async def get_config_status():
+    """Check if config already exists (for page-load auto-detection)"""
+    saved = await db.config.find_one({"type": "main"}, {"_id": 0})
+    if saved and saved.get("api_key"):
+        return {
+            "configured": True,
+            "binance_connected": binance_client is not None,
+            "telegram_enabled": bot_state.get("telegram_enabled", False),
+        }
+    return {"configured": False, "binance_connected": False, "telegram_enabled": False}
 
 @api_router.post("/bot/start")
 async def start_bot(config: BotConfig, background_tasks: BackgroundTasks):
@@ -574,8 +597,6 @@ async def get_trade_history(limit: int = 50):
 async def get_daily_stats():
     """Get daily trading statistics"""
     try:
-        today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-        
         trades = await db.trades.find({
             "status": "closed"
         }, {"_id": 0}).to_list(1000)
@@ -597,50 +618,6 @@ async def get_daily_stats():
         logger.error(f"Error fetching daily stats: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@api_router.post("/demo/set-balance")
-async def set_demo_balance(data: dict):
-    """Set demo account balance manually"""
-    balance = data.get("balance", 1000)
-    
-    if not isinstance(balance, (int, float)) or balance < 0:
-        raise HTTPException(status_code=400, detail="Invalid balance amount")
-    
-    try:
-        await db.demo_balance.update_one(
-            {"account": "main"},
-            {"$set": {
-                "balances": {
-                    "USDT": {"free": float(balance), "locked": 0.0},
-                    "BTC": {"free": 0.0, "locked": 0.0},
-                    "ETH": {"free": 0.0, "locked": 0.0},
-                    "BNB": {"free": 0.0, "locked": 0.0}
-                },
-                "updated_at": datetime.now(timezone.utc).isoformat()
-            }},
-            upsert=True
-        )
-        
-        return {
-            "status": "success",
-            "message": f"Balance set to ${balance:.2f}",
-            "new_balance": balance
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@api_router.post("/demo/reset-balance")
-async def reset_demo_balance():
-    """Reset demo account balance to $1,000"""
-    try:
-        await db.demo_balance.delete_one({"account": "main"})
-        return {
-            "status": "success",
-            "message": "Balance reset to $1,000.00",
-            "new_balance": 1000.0
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
 @api_router.post("/telegram/configure")
 async def configure_telegram_post_setup(data: dict):
     """Configure Telegram after initial setup"""
@@ -658,17 +635,17 @@ async def configure_telegram_post_setup(data: dict):
     telegram_service = get_telegram_service()
     if telegram_service:
         try:
-            await telegram_service.send_message("✅ *Telegram Configurado Correctamente*\\n\\n🤖 AlgoTrade X está listo para enviarte notificaciones\\!")
+            sent = await telegram_service.send_message("✅ <b>Telegram Configurado</b>\n\nAlgoTrade X listo para enviarte notificaciones.")
             return {
-                "status": "success",
-                "message": "Telegram configured and test message sent",
-                "telegram_enabled": True
+                "status": "success" if sent else "error",
+                "message": "Mensaje de prueba enviado" if sent else "No se pudo enviar mensaje",
+                "telegram_enabled": sent
             }
         except Exception as e:
             logger.error(f"Error sending test message: {str(e)}")
             return {
                 "status": "error",
-                "message": f"Failed to send test message: {str(e)}",
+                "message": f"Error: {str(e)}",
                 "telegram_enabled": False
             }
     
@@ -681,7 +658,7 @@ async def test_telegram():
     if not telegram_service or not telegram_service.enabled:
         raise HTTPException(status_code=400, detail="Telegram not configured")
     
-    await telegram_service.send_message("🤖 *Prueba de Notificaci\u00f3n*\\n\\n\u2705 Telegram configurado correctamente\\!")
+    await telegram_service.send_message("🤖 <b>Prueba de Notificacion</b>\n\n✅ Telegram configurado correctamente!")
     return {"status": "success", "message": "Test notification sent"}
 
 @api_router.post("/telegram/daily-report")
@@ -751,6 +728,33 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.on_event("startup")
+async def startup_load_config():
+    """Load saved config from MongoDB on startup"""
+    try:
+        saved = await db.config.find_one({"type": "main"}, {"_id": 0})
+        if saved:
+            logger.info("Found saved config, restoring...")
+            api_key = saved.get("api_key", "")
+            api_secret = saved.get("api_secret", "")
+            testnet = saved.get("testnet", True)
+            tg_token = saved.get("telegram_bot_token", "")
+            tg_chat = saved.get("telegram_chat_id", "")
+
+            if api_key and api_secret:
+                result = await initialize_binance_client(api_key, api_secret, testnet)
+                logger.info(f"Startup Binance: {result['message']}")
+
+            if tg_token and tg_chat:
+                initialize_telegram_service(tg_token, tg_chat)
+                bot_state["telegram_enabled"] = True
+                logger.info("Startup Telegram restored")
+        else:
+            logger.info("No saved config found")
+    except Exception as e:
+        logger.error(f"Error loading startup config: {e}")
+
+
 @app.on_event("shutdown")
 async def shutdown_db_client():
     global daily_scheduler
@@ -762,3 +766,26 @@ async def shutdown_db_client():
         daily_scheduler.stop()
     
     client.close()
+
+
+async def send_daily_report():
+    """Gather stats and send daily report via Telegram"""
+    tg = get_telegram_service()
+    if not tg or not tg.enabled:
+        logger.warning("Cannot send daily report - Telegram not configured")
+        return
+
+    trades_list = await db.trades.find({"status": "closed"}, {"_id": 0}).to_list(1000)
+    total_profit = sum(t.get("profit_loss", 0) for t in trades_list)
+    winning = sum(1 for t in trades_list if t.get("profit_loss", 0) > 0)
+    total = len(trades_list)
+
+    stats = {
+        "total_trades": total,
+        "winning_trades": winning,
+        "losing_trades": total - winning,
+        "win_rate": (winning / total * 100) if total > 0 else 0,
+        "total_profit": total_profit,
+        "progress": (total_profit / 1000 * 100) if total_profit > 0 else 0,
+    }
+    await tg.send_daily_report(stats, bot_state.get("balance", 0))
