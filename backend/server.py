@@ -383,8 +383,8 @@ class TradingEngine:
                 bot_state["last_updated"] = datetime.now(timezone.utc).isoformat()
                 await broadcast_message({"type": "bot_state", "data": bot_state})
                 
-                logger.info(f"⏳ Waiting 10 seconds before next check...")
-                await asyncio.sleep(10)  # Check every 10 seconds
+                logger.info(f"⏳ Waiting 5 seconds before next check...")
+                await asyncio.sleep(5)  # Check every 5 seconds
             
             except Exception as e:
                 logger.error(f"❌ Error in trading loop: {str(e)}")

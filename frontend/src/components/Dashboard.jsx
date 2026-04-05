@@ -28,7 +28,7 @@ const Dashboard = () => {
   const [dailyStats, setDailyStats] = useState(null);
   const wsRef = useRef(null);
 
-  useEffect(() => {
+    useEffect(() => {
     fetchBotStatus();
     const interval = setInterval(() => {
       if (isConfigured) {
@@ -38,7 +38,7 @@ const Dashboard = () => {
         fetchDailyStats();
         fetchBotStatus();
       }
-    }, 5000);
+    }, 3000); // Update every 3 seconds
 
     return () => clearInterval(interval);
   }, [isConfigured]);
