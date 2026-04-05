@@ -280,6 +280,13 @@ class DemoBinanceClient:
         self.db = db_client
         logger.info("🎮 DEMO MODE: Binance client initialized with simulated trading")
     
+    async def initialize(self):
+        """Initialize and load persisted data"""
+        loaded = await self.account.load_balance_from_db()
+        if not loaded:
+            logger.info("💰 No saved balance found, using balance from DB or default")
+        return self
+    
     async def close_connection(self):
         """Mock close connection"""
         pass
