@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configurar Telegram - AlgoTrade X</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 600px;
+            width: 100%;
+        }
+        h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 32px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 16px;
+        }
+        .step {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border-left: 4px solid #667eea;
+        }
+        .step h3 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+        .step p {
+            color: #555;
+            line-height: 1.6;
+            margin-bottom: 10px;
+        }
+        .step code {
+            background: #e9ecef;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            color: #d63384;
+        }
+        .input-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            color: #333;
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        button {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        button:hover {
+            transform: translateY(-2px);
+        }
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 16px;
+            border-radius: 8px;
+            display: none;
+        }
+        .result.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .result.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .note {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 20px;
+        }
+        .note strong {
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📱 Configurar Telegram</h1>
+        <p class="subtitle">Sigue estos pasos para recibir notificaciones de tus trades</p>
+
+        <div class="step">
+            <h3>Paso 1: Crear tu Bot</h3>
+            <p>1. Abre Telegram y busca: <code>@BotFather</code></p>
+            <p>2. Envía el comando: <code>/newbot</code></p>
+            <p>3. Sigue las instrucciones y guarda el <strong>Bot Token</strong></p>
+        </div>
+
+        <div class="step">
+            <h3>Paso 2: Obtener tu Chat ID</h3>
+            <p>1. Busca en Telegram: <code>@userinfobot</code></p>
+            <p>2. Envía: <code>/start</code></p>
+            <p>3. Copia el número de <strong>Id</strong></p>
+        </div>
+
+        <div class="step">
+            <h3>Paso 3: Activa tu Bot</h3>
+            <p>1. Busca tu bot en Telegram</p>
+            <p>2. Envía: <code>/start</code></p>
+        </div>
+
+        <form id="telegramForm">
+            <div class="input-group">
+                <label for="botToken">🤖 Bot Token</label>
+                <input 
+                    type="text" 
+                    id="botToken" 
+                    placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
+                    required
+                >
+            </div>
+
+            <div class="input-group">
+                <label for="chatId">💬 Tu Chat ID</label>
+                <input 
+                    type="text" 
+                    id="chatId" 
+                    placeholder="123456789"
+                    required
+                >
+            </div>
+
+            <button type="submit" id="submitBtn">
+                ✅ Configurar Telegram
+            </button>
+        </form>
+
+        <div id="result" class="result"></div>
+
+        <div class="note">
+            <strong>⚠️ Nota:</strong> Después de configurar, recibirás un mensaje de prueba en Telegram. 
+            Si no lo recibes, verifica que hayas enviado /start a tu bot.
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'https://auto-trader-222.preview.emergentagent.com/api';
+        const form = document.getElementById('telegramForm');
+        const result = document.getElementById('result');
+        const submitBtn = document.getElementById('submitBtn');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const botToken = document.getElementById('botToken').value.trim();
+            const chatId = document.getElementById('chatId').value.trim();
+
+            if (!botToken || !chatId) {
+                showResult('Por favor completa ambos campos', 'error');
+                return;
+            }
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = '⏳ Configurando...';
+
+            try {
+                const response = await fetch(`${API_URL}/telegram/configure`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        bot_token: botToken,
+                        chat_id: chatId
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    showResult(
+                        '✅ ¡Telegram configurado correctamente! Deberías haber recibido un mensaje de prueba. ' +
+                        'Ahora inicia el bot de trading para recibir notificaciones de cada trade.',
+                        'success'
+                    );
+                    form.reset();
+                } else {
+                    showResult(
+                        `❌ Error: ${data.message || 'No se pudo configurar Telegram'}. ` +
+                        'Verifica que el Bot Token y Chat ID sean correctos.',
+                        'error'
+                    );
+                }
+            } catch (error) {
+                showResult(
+                    `❌ Error de conexión: ${error.message}. ` +
+                    'Verifica que el bot de trading esté corriendo.',
+                    'error'
+                );
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = '✅ Configurar Telegram';
+            }
+        });
+
+        function showResult(message, type) {
+            result.textContent = message;
+            result.className = `result ${type}`;
+            result.style.display = 'block';
+            
+            setTimeout(() => {
+                result.style.display = 'none';
+            }, 10000);
+        }
+    </script>
+</body>
+</html>

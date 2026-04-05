@@ -597,6 +597,39 @@ async def get_daily_stats():
         logger.error(f"Error fetching daily stats: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@api_router.post("/telegram/configure")
+async def configure_telegram_post_setup(data: dict):
+    """Configure Telegram after initial setup"""
+    bot_token = data.get("bot_token")
+    chat_id = data.get("chat_id")
+    
+    if not bot_token or not chat_id:
+        raise HTTPException(status_code=400, detail="Bot token and chat ID required")
+    
+    # Initialize Telegram service
+    initialize_telegram_service(bot_token, chat_id)
+    bot_state["telegram_enabled"] = True
+    
+    # Send test message
+    telegram_service = get_telegram_service()
+    if telegram_service:
+        try:
+            await telegram_service.send_message("✅ *Telegram Configurado Correctamente*\\n\\n🤖 AlgoTrade X está listo para enviarte notificaciones\\!")
+            return {
+                "status": "success",
+                "message": "Telegram configured and test message sent",
+                "telegram_enabled": True
+            }
+        except Exception as e:
+            logger.error(f"Error sending test message: {str(e)}")
+            return {
+                "status": "error",
+                "message": f"Failed to send test message: {str(e)}",
+                "telegram_enabled": False
+            }
+    
+    return {"status": "error", "message": "Failed to initialize Telegram"}
+
 @api_router.post("/telegram/test")
 async def test_telegram():
     """Test Telegram notification"""
