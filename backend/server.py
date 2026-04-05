@@ -715,12 +715,22 @@ async def get_daily_stats():
 
 @api_router.post("/telegram/configure")
 async def configure_telegram_post_setup(data: dict):
-    """Configure Telegram after initial setup"""
+    """Configure Telegram after initial setup - saves to MongoDB"""
     bot_token = data.get("bot_token")
     chat_id = data.get("chat_id")
     
     if not bot_token or not chat_id:
         raise HTTPException(status_code=400, detail="Bot token and chat ID required")
+    
+    # Save to MongoDB so it survives restarts
+    await db.config.update_one(
+        {"type": "main"},
+        {"$set": {
+            "telegram_bot_token": bot_token,
+            "telegram_chat_id": chat_id
+        }},
+        upsert=True
+    )
     
     # Initialize Telegram service
     initialize_telegram_service(bot_token, chat_id)
