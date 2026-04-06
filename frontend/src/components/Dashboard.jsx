@@ -421,62 +421,73 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Strategy Selector - only show when bot is stopped */}
-      {!botStatus?.is_running && (
-        <div className="px-6 pt-4">
-          <Card className="bg-[#0F0F11] border border-white/10 p-6" data-testid="strategy-selector">
-            <h2 className="text-lg font-bold text-white mb-1" style={{ fontFamily: 'Chivo' }}>ESTRATEGIA DE TRADING</h2>
-            <p className="text-xs text-zinc-500 font-mono mb-4">Selecciona tu perfil de riesgo antes de iniciar el bot</p>
-            
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {Object.entries(STRATEGIES).map(([key, strat]) => (
-                <div
-                  key={key}
-                  onClick={() => setSelectedStrategy(strat.id)}
-                  className={`cursor-pointer border rounded-sm p-5 transition-all ${
-                    selectedStrategy === strat.id 
-                      ? `${strat.borderColor} ${strat.bgColor} border-2` 
-                      : 'border-white/10 hover:border-white/20 bg-[#0A0A0A]'
-                  }`}
-                  data-testid={`strategy-${key}`}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-base font-bold text-white" style={{ fontFamily: 'Chivo' }}>{strat.name}</span>
-                    <span 
-                      className="text-xs font-mono px-2 py-1 rounded-sm"
-                      style={{ backgroundColor: `${strat.color}20`, color: strat.color }}
-                    >
-                      {strat.riskLabel}
-                    </span>
-                  </div>
-                  
-                  <p className="text-xs text-zinc-400 mb-3" style={{ fontFamily: 'IBM Plex Sans' }}>
-                    {strat.description}
-                  </p>
-                  
-                  <div className="space-y-1.5">
-                    {strat.details.map((detail, i) => (
-                      <div key={i} className={`text-xs font-mono ${
-                        detail.startsWith("ADVERTENCIA") ? "text-red-400 font-bold" : "text-zinc-500"
-                      }`}>
-                        {detail.startsWith("ADVERTENCIA") ? "⚠ " : "- "}{detail}
-                      </div>
-                    ))}
-                  </div>
-                  
-                  {selectedStrategy === strat.id && (
-                    <div className="mt-3 text-xs font-mono text-center py-1.5 rounded-sm"
-                      style={{ backgroundColor: `${strat.color}30`, color: strat.color }}
-                    >
-                      SELECCIONADO
-                    </div>
-                  )}
+      {/* Strategy Selector - show always, but disable selection when running */}
+      <div className="px-6 pt-4">
+        <Card className="bg-[#0F0F11] border border-white/10 p-6" data-testid="strategy-selector">
+          <div className="flex items-center justify-between mb-1">
+            <h2 className="text-lg font-bold text-white" style={{ fontFamily: 'Chivo' }}>ESTRATEGIA DE TRADING</h2>
+            {botStatus?.is_running && (
+              <span className="text-xs font-mono text-emerald-500 px-3 py-1 bg-emerald-500/10 rounded-sm">
+                EN USO
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-zinc-500 font-mono mb-4">
+            {botStatus?.is_running 
+              ? "Detene el bot para cambiar de estrategia" 
+              : "Selecciona tu perfil de riesgo antes de iniciar el bot"}
+          </p>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {Object.entries(STRATEGIES).map(([key, strat]) => (
+              <div
+                key={key}
+                onClick={() => !botStatus?.is_running && setSelectedStrategy(strat.id)}
+                className={`border rounded-sm p-5 transition-all ${
+                  botStatus?.is_running ? 'cursor-default' : 'cursor-pointer'
+                } ${
+                  selectedStrategy === strat.id 
+                    ? `${strat.borderColor} ${strat.bgColor} border-2` 
+                    : `border-white/10 bg-[#0A0A0A] ${!botStatus?.is_running ? 'hover:border-white/20' : 'opacity-40'}`
+                }`}
+                data-testid={`strategy-${key}`}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-base font-bold text-white" style={{ fontFamily: 'Chivo' }}>{strat.name}</span>
+                  <span 
+                    className="text-xs font-mono px-2 py-1 rounded-sm"
+                    style={{ backgroundColor: `${strat.color}20`, color: strat.color }}
+                  >
+                    {strat.riskLabel}
+                  </span>
                 </div>
-              ))}
-            </div>
-          </Card>
-        </div>
-      )}
+                
+                <p className="text-xs text-zinc-400 mb-3" style={{ fontFamily: 'IBM Plex Sans' }}>
+                  {strat.description}
+                </p>
+                
+                <div className="space-y-1.5">
+                  {strat.details.map((detail, i) => (
+                    <div key={i} className={`text-xs font-mono ${
+                      detail.startsWith("ADVERTENCIA") ? "text-red-400 font-bold" : "text-zinc-500"
+                    }`}>
+                      {detail.startsWith("ADVERTENCIA") ? "⚠ " : "- "}{detail}
+                    </div>
+                  ))}
+                </div>
+                
+                {selectedStrategy === strat.id && (
+                  <div className="mt-3 text-xs font-mono text-center py-1.5 rounded-sm"
+                    style={{ backgroundColor: `${strat.color}30`, color: strat.color }}
+                  >
+                    {botStatus?.is_running ? "ACTIVO" : "SELECCIONADO"}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
 
       {/* Main Content */}
       <div className="p-6">
