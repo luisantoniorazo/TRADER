@@ -1,5 +1,14 @@
 # AlgoTrade X - Bitacora de Cambios
 
+## Version 1.6 - Grafica de Ganancias Diarias (6 Abril 2026)
+- Grafica de barras con ganancias/perdidas por dia (verde=ganancia, rojo=perdida)
+- Muestra estrategia utilizada cada dia (Conservador, Moderado, Agresivo) con colores
+- Tooltip con detalle: P&L del dia, acumulado total, trades, win rate, estrategia
+- Acumulado total en la esquina superior derecha
+- Leyenda de estrategias debajo de la grafica
+- Endpoint: GET /api/stats/profit-history
+- Cada trade ahora guarda la estrategia con la que fue ejecutado
+
 ## Version 1.5 - Venta Manual de Posiciones (5 Abril 2026)
 - Panel "POSICIONES ABIERTAS" con tabla de todas las posiciones activas
 - Boton "VENDER" individual por cada posicion con precio actual y P&L en tiempo real

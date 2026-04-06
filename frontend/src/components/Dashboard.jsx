@@ -9,6 +9,7 @@ import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import PriceChart from "./PriceChart";
+import ProfitChart from "./ProfitChart";
 import TradesTable from "./TradesTable";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -29,6 +30,7 @@ const Dashboard = () => {
   const [selectedStrategy, setSelectedStrategy] = useState("aggressive_scalping");
   const [openPositions, setOpenPositions] = useState([]);
   const [sellingSymbol, setSellingSymbol] = useState(null);
+  const [profitHistory, setProfitHistory] = useState([]);
   const wsRef = useRef(null);
 
   const STRATEGIES = {
@@ -131,6 +133,7 @@ const Dashboard = () => {
         fetchDailyStats();
         fetchBotStatus();
         fetchOpenPositions();
+        fetchProfitHistory();
       }
     }, 3000); // Update every 3 seconds
 
@@ -288,6 +291,15 @@ const Dashboard = () => {
     }
   };
 
+  const fetchProfitHistory = async () => {
+    try {
+      const resp = await axios.get(`${API}/stats/profit-history`);
+      setProfitHistory(resp.data);
+    } catch (err) {
+      // No history yet
+    }
+  };
+
   const handleSellPosition = async (symbol) => {
     setSellingSymbol(symbol);
     try {
@@ -432,7 +444,7 @@ const Dashboard = () => {
       <div className="bg-black border-b border-white/10 px-6 py-4">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-black text-white tracking-tight" style={{ fontFamily: 'Chivo' }} data-testid="dashboard-title">
-            AlgoTrade X <span className="text-xs font-mono text-zinc-500 ml-2">v1.5</span>
+            AlgoTrade X <span className="text-xs font-mono text-zinc-500 ml-2">v1.6</span>
           </h1>
           
           <div className="flex items-center gap-6">
@@ -585,6 +597,29 @@ const Dashboard = () => {
                 </p>
               </Card>
             </div>
+          </div>
+
+          {/* Profit History Chart */}
+          <div className="lg:col-span-12">
+            <Card className="bg-[#0F0F11] border border-white/10 p-6" data-testid="profit-history-chart">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-lg font-bold text-white" style={{ fontFamily: 'Chivo' }}>GANANCIAS DIARIAS</h2>
+                  <p className="text-xs text-zinc-500 font-mono">Efectividad del bot por dia y estrategia utilizada</p>
+                </div>
+                {profitHistory.length > 0 && (
+                  <div className="text-right">
+                    <p className={`text-lg font-black font-mono ${
+                      profitHistory[profitHistory.length - 1]?.cumulative >= 0 ? 'text-[#10B981]' : 'text-[#EF4444]'
+                    }`}>
+                      ${profitHistory[profitHistory.length - 1]?.cumulative?.toFixed(2)}
+                    </p>
+                    <p className="text-xs text-zinc-500 font-mono">acumulado total</p>
+                  </div>
+                )}
+              </div>
+              <ProfitChart data={profitHistory} />
+            </Card>
           </div>
 
           {/* Open Positions - Manual Sell */}

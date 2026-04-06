@@ -383,6 +383,7 @@ class TradingEngine:
             
             trade_dict = trade.model_dump()
             trade_dict["timestamp"] = trade_dict["timestamp"].isoformat()
+            trade_dict["strategy"] = self.config.strategy.value
             await db.trades.insert_one(trade_dict)
             
             bot_state["total_trades"] += 1
@@ -877,6 +878,50 @@ async def get_daily_stats():
     except Exception as e:
         logger.error(f"Error fetching daily stats: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/stats/profit-history")
+async def get_profit_history():
+    """Get daily profit history grouped by date and strategy"""
+    try:
+        trades = await db.trades.find(
+            {"status": "closed"}, {"_id": 0}
+        ).sort("timestamp", 1).to_list(5000)
+        
+        daily_map = {}
+        for t in trades:
+            ts = t.get("timestamp", "")
+            if isinstance(ts, str) and len(ts) >= 10:
+                day = ts[:10]
+            elif hasattr(ts, "strftime"):
+                day = ts.strftime("%Y-%m-%d")
+            else:
+                continue
+            
+            pl = t.get("profit_loss", 0)
+            strategy = t.get("strategy", "aggressive_scalping")
+            
+            if day not in daily_map:
+                daily_map[day] = {"date": day, "profit": 0, "trades": 0, "wins": 0, "strategy": strategy}
+            
+            daily_map[day]["profit"] += pl
+            daily_map[day]["trades"] += 1
+            if pl > 0:
+                daily_map[day]["wins"] += 1
+            # Keep last strategy used that day
+            daily_map[day]["strategy"] = strategy
+        
+        # Build cumulative profit
+        history = sorted(daily_map.values(), key=lambda x: x["date"])
+        cumulative = 0
+        for day in history:
+            cumulative += day["profit"]
+            day["cumulative"] = cumulative
+            day["win_rate"] = (day["wins"] / day["trades"] * 100) if day["trades"] > 0 else 0
+        
+        return history
+    except Exception as e:
+        logger.error(f"Error fetching profit history: {e}")
+        return []
 
 @api_router.post("/telegram/configure")
 async def configure_telegram_post_setup(data: dict):
