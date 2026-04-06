@@ -1,5 +1,13 @@
 # AlgoTrade X - Bitacora de Cambios
 
+## Version 1.7 - Filtros de Fecha en Grafica (6 Abril 2026)
+- Accesos rapidos: 1D, 7D, 30D, 90D, 180D, 1A (1 ano), TODO
+- Selector de rango de fechas personalizado (fecha inicio - fecha fin)
+- Muestra cantidad de dias filtrados
+- Grafica de barras con ganancias/perdidas por dia
+- Tooltip con estrategia, P&L, win rate y acumulado
+- Cada trade guarda la estrategia con la que fue ejecutado
+
 ## Version 1.6 - Grafica de Ganancias Diarias (6 Abril 2026)
 - Grafica de barras con ganancias/perdidas por dia (verde=ganancia, rojo=perdida)
 - Muestra estrategia utilizada cada dia (Conservador, Moderado, Agresivo) con colores

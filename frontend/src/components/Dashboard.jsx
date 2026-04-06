@@ -444,7 +444,7 @@ const Dashboard = () => {
       <div className="bg-black border-b border-white/10 px-6 py-4">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-black text-white tracking-tight" style={{ fontFamily: 'Chivo' }} data-testid="dashboard-title">
-            AlgoTrade X <span className="text-xs font-mono text-zinc-500 ml-2">v1.6</span>
+            AlgoTrade X <span className="text-xs font-mono text-zinc-500 ml-2">v1.7</span>
           </h1>
           
           <div className="flex items-center gap-6">
