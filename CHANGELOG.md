@@ -1,5 +1,13 @@
 # AlgoTrade X - Bitacora de Cambios
 
+## Version 1.5 - Venta Manual de Posiciones (5 Abril 2026)
+- Panel "POSICIONES ABIERTAS" con tabla de todas las posiciones activas
+- Boton "VENDER" individual por cada posicion con precio actual y P&L en tiempo real
+- Boton "VENDER TODAS" para cerrar todas las posiciones de golpe
+- Muestra: simbolo, precio entrada, precio actual, cantidad, invertido, valor actual, P&L
+- Notificacion de Telegram al vender manualmente
+- Endpoints: GET /api/positions/open, POST /api/positions/sell, POST /api/positions/sell-all
+
 ## Version 1.4 - Selector de Estrategias (5 Abril 2026)
 - Selector de 3 perfiles de riesgo: Conservador, Moderado, Agresivo
 - Cada estrategia muestra descripcion, parametros RSI, % de inversion, target y stop loss

@@ -619,6 +619,159 @@ async def stop_bot():
     
     return {"status": "success", "message": "Trading bot stopped"}
 
+@api_router.get("/positions/open")
+async def get_open_positions():
+    """Get all open positions from database"""
+    try:
+        positions = await db.trades.find(
+            {"status": "open"}, {"_id": 0}
+        ).to_list(100)
+        
+        # Get current prices for P&L calculation
+        for pos in positions:
+            try:
+                ticker = await binance_client.get_ticker(symbol=pos["symbol"])
+                current_price = float(ticker["lastPrice"])
+                entry_price = pos.get("entry_price", 0)
+                quantity = pos.get("quantity", 0)
+                unrealized_pl = (current_price - entry_price) * quantity
+                pl_pct = ((current_price - entry_price) / entry_price * 100) if entry_price > 0 else 0
+                pos["current_price"] = current_price
+                pos["unrealized_pl"] = unrealized_pl
+                pos["pl_pct"] = pl_pct
+                pos["invested"] = entry_price * quantity
+                pos["current_value"] = current_price * quantity
+            except Exception:
+                pos["current_price"] = 0
+                pos["unrealized_pl"] = 0
+                pos["pl_pct"] = 0
+                pos["invested"] = 0
+                pos["current_value"] = 0
+        
+        return positions
+    except Exception as e:
+        logger.error(f"Error getting open positions: {e}")
+        return []
+
+@api_router.post("/positions/sell")
+async def sell_position(data: dict):
+    """Manually sell a specific open position"""
+    symbol = data.get("symbol")
+    if not symbol:
+        raise HTTPException(status_code=400, detail="Symbol required")
+    
+    if not binance_client:
+        raise HTTPException(status_code=400, detail="Binance not connected")
+    
+    # Find position in DB
+    position = await db.trades.find_one({"symbol": symbol, "status": "open"}, {"_id": 0})
+    if not position:
+        raise HTTPException(status_code=404, detail=f"No open position for {symbol}")
+    
+    try:
+        # Get current price
+        ticker = await binance_client.get_ticker(symbol=symbol)
+        current_price = float(ticker["lastPrice"])
+        quantity = position.get("quantity", 0)
+        entry_price = position.get("entry_price", 0)
+        
+        # Get symbol precision
+        engine = trading_engine or TradingEngine(BotConfig(strategy="aggressive_scalping", symbols=[symbol]))
+        sym_info = await engine.get_symbol_precision(symbol)
+        if sym_info:
+            quantity = engine.round_to_precision(quantity, sym_info["precision"], sym_info["step_size"])
+        
+        # Execute SELL on Binance
+        order_result = await binance_client.create_order(
+            symbol=symbol,
+            side="SELL",
+            type="MARKET",
+            quantity=quantity
+        )
+        
+        order_status = order_result.get("status", "UNKNOWN")
+        if order_status not in ("FILLED", "PARTIALLY_FILLED"):
+            raise HTTPException(status_code=500, detail=f"Order not filled: {order_status}")
+        
+        # Get actual fill price
+        fills = order_result.get("fills", [])
+        if fills:
+            filled_price = sum(float(f["price"]) * float(f["qty"]) for f in fills) / sum(float(f["qty"]) for f in fills)
+        else:
+            filled_price = current_price
+        
+        profit_loss = (filled_price - entry_price) * quantity
+        
+        # Update in database
+        await db.trades.update_one(
+            {"symbol": symbol, "status": "open"},
+            {"$set": {
+                "exit_price": filled_price,
+                "profit_loss": profit_loss,
+                "status": "closed"
+            }}
+        )
+        
+        # Remove from active positions if engine is running
+        if trading_engine and symbol in trading_engine.active_positions:
+            del trading_engine.active_positions[symbol]
+        
+        # Update bot state
+        bot_state["daily_profit"] += profit_loss
+        if profit_loss > 0:
+            bot_state["winning_trades"] += 1
+        
+        # Send Telegram notification
+        tg = get_telegram_service()
+        if tg and tg.enabled:
+            await tg.send_trade_notification({
+                "side": "SELL",
+                "symbol": symbol,
+                "entry_price": entry_price,
+                "exit_price": filled_price,
+                "quantity": quantity,
+                "profit_loss": profit_loss,
+                "status": "closed"
+            })
+        
+        return {
+            "status": "success",
+            "symbol": symbol,
+            "entry_price": entry_price,
+            "exit_price": filled_price,
+            "profit_loss": profit_loss,
+            "message": f"{'Ganancia' if profit_loss > 0 else 'Perdida'}: ${profit_loss:+.2f}"
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Manual sell failed for {symbol}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/positions/sell-all")
+async def sell_all_positions():
+    """Sell all open positions at market price"""
+    positions = await db.trades.find({"status": "open"}, {"_id": 0}).to_list(100)
+    
+    if not positions:
+        return {"status": "success", "message": "No hay posiciones abiertas", "results": []}
+    
+    results = []
+    for pos in positions:
+        try:
+            result = await sell_position({"symbol": pos["symbol"]})
+            results.append(result)
+        except Exception as e:
+            results.append({"status": "error", "symbol": pos["symbol"], "message": str(e)})
+    
+    total_pl = sum(r.get("profit_loss", 0) for r in results if r.get("status") == "success")
+    return {
+        "status": "success",
+        "message": f"Vendidas {len(results)} posiciones. P&L total: ${total_pl:+.2f}",
+        "results": results
+    }
+
 @api_router.get("/bot/status")
 async def get_bot_status():
     """Get current bot status"""

@@ -27,6 +27,8 @@ const Dashboard = () => {
   const [trades, setTrades] = useState([]);
   const [dailyStats, setDailyStats] = useState(null);
   const [selectedStrategy, setSelectedStrategy] = useState("aggressive_scalping");
+  const [openPositions, setOpenPositions] = useState([]);
+  const [sellingSymbol, setSellingSymbol] = useState(null);
   const wsRef = useRef(null);
 
   const STRATEGIES = {
@@ -128,6 +130,7 @@ const Dashboard = () => {
         fetchTrades();
         fetchDailyStats();
         fetchBotStatus();
+        fetchOpenPositions();
       }
     }, 3000); // Update every 3 seconds
 
@@ -276,6 +279,51 @@ const Dashboard = () => {
     }
   };
 
+  const fetchOpenPositions = async () => {
+    try {
+      const resp = await axios.get(`${API}/positions/open`);
+      setOpenPositions(resp.data);
+    } catch (err) {
+      // No positions or error
+    }
+  };
+
+  const handleSellPosition = async (symbol) => {
+    setSellingSymbol(symbol);
+    try {
+      const resp = await axios.post(`${API}/positions/sell`, { symbol });
+      const data = resp.data;
+      if (data.profit_loss >= 0) {
+        toast.success(`${symbol} vendido: ${data.message}`);
+      } else {
+        toast.warning(`${symbol} vendido: ${data.message}`);
+      }
+      fetchOpenPositions();
+      fetchBotStatus();
+      fetchBalance();
+    } catch (error) {
+      toast.error(`Error vendiendo ${symbol}: ` + (error.response?.data?.detail || error.message));
+    } finally {
+      setSellingSymbol(null);
+    }
+  };
+
+  const handleSellAll = async () => {
+    if (openPositions.length === 0) {
+      toast.warning("No hay posiciones abiertas");
+      return;
+    }
+    try {
+      const resp = await axios.post(`${API}/positions/sell-all`);
+      toast.success(resp.data.message);
+      fetchOpenPositions();
+      fetchBotStatus();
+      fetchBalance();
+    } catch (error) {
+      toast.error("Error: " + (error.response?.data?.detail || error.message));
+    }
+  };
+
   if (!isConfigured) {
     return (
       <div className="min-h-screen bg-[#050505] flex items-center justify-center p-4" data-testid="setup-screen">
@@ -384,7 +432,7 @@ const Dashboard = () => {
       <div className="bg-black border-b border-white/10 px-6 py-4">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-black text-white tracking-tight" style={{ fontFamily: 'Chivo' }} data-testid="dashboard-title">
-            AlgoTrade X <span className="text-xs font-mono text-zinc-500 ml-2">v1.4</span>
+            AlgoTrade X <span className="text-xs font-mono text-zinc-500 ml-2">v1.5</span>
           </h1>
           
           <div className="flex items-center gap-6">
@@ -538,6 +586,69 @@ const Dashboard = () => {
               </Card>
             </div>
           </div>
+
+          {/* Open Positions - Manual Sell */}
+          {openPositions.length > 0 && (
+            <div className="lg:col-span-12">
+              <Card className="bg-[#0F0F11] border border-white/10 p-6" data-testid="open-positions-panel">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h2 className="text-lg font-bold text-white" style={{ fontFamily: 'Chivo' }}>POSICIONES ABIERTAS</h2>
+                    <p className="text-xs text-zinc-500 font-mono">{openPositions.length} posicion{openPositions.length !== 1 ? 'es' : ''} activa{openPositions.length !== 1 ? 's' : ''}</p>
+                  </div>
+                  <Button
+                    onClick={handleSellAll}
+                    className="bg-[#EF4444] hover:bg-[#DC2626] text-white font-bold rounded-sm px-4 text-xs"
+                    data-testid="sell-all-btn"
+                  >
+                    VENDER TODAS
+                  </Button>
+                </div>
+                
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-white/10">
+                        <th className="text-left py-2 px-3 text-xs font-mono text-zinc-400">SIMBOLO</th>
+                        <th className="text-right py-2 px-3 text-xs font-mono text-zinc-400">PRECIO ENTRADA</th>
+                        <th className="text-right py-2 px-3 text-xs font-mono text-zinc-400">PRECIO ACTUAL</th>
+                        <th className="text-right py-2 px-3 text-xs font-mono text-zinc-400">CANTIDAD</th>
+                        <th className="text-right py-2 px-3 text-xs font-mono text-zinc-400">INVERTIDO</th>
+                        <th className="text-right py-2 px-3 text-xs font-mono text-zinc-400">VALOR ACTUAL</th>
+                        <th className="text-right py-2 px-3 text-xs font-mono text-zinc-400">P&L</th>
+                        <th className="text-center py-2 px-3 text-xs font-mono text-zinc-400">ACCION</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {openPositions.map((pos) => (
+                        <tr key={pos.symbol} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                          <td className="py-3 px-3 font-mono font-bold text-white">{pos.symbol.replace('USDT', '')}</td>
+                          <td className="py-3 px-3 text-right font-mono text-zinc-300">${pos.entry_price?.toFixed(4)}</td>
+                          <td className="py-3 px-3 text-right font-mono text-zinc-300">${pos.current_price?.toFixed(4)}</td>
+                          <td className="py-3 px-3 text-right font-mono text-zinc-400">{pos.quantity?.toFixed(6)}</td>
+                          <td className="py-3 px-3 text-right font-mono text-zinc-300">${pos.invested?.toFixed(2)}</td>
+                          <td className="py-3 px-3 text-right font-mono text-zinc-300">${pos.current_value?.toFixed(2)}</td>
+                          <td className={`py-3 px-3 text-right font-mono font-bold ${pos.unrealized_pl >= 0 ? 'text-[#10B981]' : 'text-[#EF4444]'}`}>
+                            ${pos.unrealized_pl?.toFixed(2)} ({pos.pl_pct?.toFixed(2)}%)
+                          </td>
+                          <td className="py-3 px-3 text-center">
+                            <Button
+                              onClick={() => handleSellPosition(pos.symbol)}
+                              disabled={sellingSymbol === pos.symbol}
+                              className="bg-[#EF4444] hover:bg-[#DC2626] text-white font-bold rounded-sm px-3 py-1 text-xs h-7"
+                              data-testid={`sell-${pos.symbol}`}
+                            >
+                              {sellingSymbol === pos.symbol ? "..." : "VENDER"}
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            </div>
+          )}
 
           {/* Market Prices */}
           <div className="lg:col-span-12">
