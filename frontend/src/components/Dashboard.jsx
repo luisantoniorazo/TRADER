@@ -125,21 +125,38 @@ const Dashboard = () => {
   }, []);
 
     useEffect(() => {
+    if (!isConfigured) return;
+    
+    // Fetch everything immediately
     fetchBotStatus();
+    fetchPrices();
+    fetchBalance();
+    fetchTrades();
+    fetchDailyStats();
+    fetchOpenPositions();
+    fetchProfitHistory();
+    fetchMarketIntel();
+    
+    // Then poll every 3 seconds
     const interval = setInterval(() => {
-      if (isConfigured) {
-        fetchPrices();
-        fetchBalance();
-        fetchTrades();
-        fetchDailyStats();
-        fetchBotStatus();
-        fetchOpenPositions();
-        fetchProfitHistory();
-        fetchMarketIntel();
-      }
-    }, 3000); // Update every 3 seconds
+      fetchPrices();
+      fetchBalance();
+      fetchBotStatus();
+      fetchOpenPositions();
+    }, 3000);
 
-    return () => clearInterval(interval);
+    // Slower poll for heavier endpoints (every 15 seconds)
+    const slowInterval = setInterval(() => {
+      fetchTrades();
+      fetchDailyStats();
+      fetchProfitHistory();
+      fetchMarketIntel();
+    }, 15000);
+
+    return () => {
+      clearInterval(interval);
+      clearInterval(slowInterval);
+    };
   }, [isConfigured]);
 
   const fetchBotStatus = async () => {
