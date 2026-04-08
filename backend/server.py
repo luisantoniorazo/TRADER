@@ -798,8 +798,33 @@ async def sell_all_positions():
 
 @api_router.get("/bot/status")
 async def get_bot_status():
-    """Get current bot status"""
-    return bot_state
+    """Get current bot status - stats calculated from database"""
+    try:
+        # Calculate from actual trades in DB
+        closed_trades = await db.trades.find({"status": "closed"}, {"_id": 0}).to_list(5000)
+        open_trades = await db.trades.count_documents({"status": "open"})
+        
+        total_profit = sum(t.get("profit_loss", 0) for t in closed_trades)
+        winning = sum(1 for t in closed_trades if t.get("profit_loss", 0) > 0)
+        total_closed = len(closed_trades)
+        
+        return {
+            "is_running": bot_state["is_running"],
+            "strategy": bot_state["strategy"],
+            "daily_profit": total_profit,
+            "total_trades": total_closed + open_trades,
+            "winning_trades": winning,
+            "balance": bot_state.get("balance", 0),
+            "last_updated": bot_state.get("last_updated"),
+            "telegram_enabled": bot_state.get("telegram_enabled", False),
+            "use_percentage": bot_state.get("use_percentage", True),
+            "balance_percentage": bot_state.get("balance_percentage", 5.0),
+            "open_positions": open_trades,
+            "win_rate": (winning / total_closed * 100) if total_closed > 0 else 0
+        }
+    except Exception as e:
+        logger.error(f"Error getting bot status: {e}")
+        return bot_state
 
 @api_router.get("/market/prices")
 async def get_market_prices(symbols: str = "BTCUSDT,ETHUSDT,BNBUSDT"):
@@ -1085,7 +1110,7 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup_load_config():
-    """Load saved config from MongoDB on startup"""
+    """Load saved config from MongoDB on startup and restore stats"""
     try:
         saved = await db.config.find_one({"type": "main"}, {"_id": 0})
         if saved:
@@ -1104,7 +1129,18 @@ async def startup_load_config():
                 initialize_telegram_service(tg_token, tg_chat)
                 bot_state["telegram_enabled"] = True
                 logger.info("Startup Telegram restored")
-        else:
+        
+        # Restore stats from trades in DB
+        closed_trades = await db.trades.find({"status": "closed"}, {"_id": 0}).to_list(5000)
+        open_count = await db.trades.count_documents({"status": "open"})
+        total_profit = sum(t.get("profit_loss", 0) for t in closed_trades)
+        winning = sum(1 for t in closed_trades if t.get("profit_loss", 0) > 0)
+        bot_state["daily_profit"] = total_profit
+        bot_state["total_trades"] = len(closed_trades) + open_count
+        bot_state["winning_trades"] = winning
+        logger.info(f"Restored stats: {len(closed_trades)} closed trades, {open_count} open, P&L=${total_profit:.2f}")
+        
+        if not saved:
             logger.info("No saved config found")
     except Exception as e:
         logger.error(f"Error loading startup config: {e}")
