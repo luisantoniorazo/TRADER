@@ -696,9 +696,12 @@ const Dashboard = () => {
               </Card>
 
               <Card className="bg-[#0F0F11] border border-white/10 p-6" data-testid="balance-card">
-                <p className="text-xs text-zinc-400 font-mono uppercase tracking-wider">BALANCE USDT</p>
+                <p className="text-xs text-zinc-400 font-mono uppercase tracking-wider">BALANCE USDT (BINANCE)</p>
                 <p className="text-4xl font-black text-white font-mono mt-2" data-testid="balance-amount">
-                  ${botStatus?.balance?.toFixed(2) || '0.00'}
+                  ${balance.find(b => b.asset === 'USDT')?.free?.toFixed(2) || '0.00'}
+                </p>
+                <p className="text-xs text-zinc-500 font-mono mt-1">
+                  Directo de Binance
                 </p>
               </Card>
             </div>
