@@ -31,6 +31,7 @@ const Dashboard = () => {
   const [openPositions, setOpenPositions] = useState([]);
   const [sellingSymbol, setSellingSymbol] = useState(null);
   const [profitHistory, setProfitHistory] = useState([]);
+  const [marketIntel, setMarketIntel] = useState(null);
   const wsRef = useRef(null);
 
   const STRATEGIES = {
@@ -134,6 +135,7 @@ const Dashboard = () => {
         fetchBotStatus();
         fetchOpenPositions();
         fetchProfitHistory();
+        fetchMarketIntel();
       }
     }, 3000); // Update every 3 seconds
 
@@ -300,6 +302,15 @@ const Dashboard = () => {
     }
   };
 
+  const fetchMarketIntel = async () => {
+    try {
+      const resp = await axios.get(`${API}/market/intelligence`);
+      setMarketIntel(resp.data);
+    } catch (err) {
+      // Not available
+    }
+  };
+
   const handleSellPosition = async (symbol) => {
     setSellingSymbol(symbol);
     try {
@@ -444,7 +455,7 @@ const Dashboard = () => {
       <div className="bg-black border-b border-white/10 px-6 py-4">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-black text-white tracking-tight" style={{ fontFamily: 'Chivo' }} data-testid="dashboard-title">
-            AlgoTrade X <span className="text-xs font-mono text-zinc-500 ml-2">v1.7</span>
+            AlgoTrade X <span className="text-xs font-mono text-zinc-500 ml-2">v1.8</span>
           </h1>
           
           <div className="flex items-center gap-6">
@@ -552,6 +563,100 @@ const Dashboard = () => {
       {/* Main Content */}
       <div className="p-6">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+
+          {/* Market Intelligence Panel */}
+          {marketIntel && (
+            <div className="lg:col-span-12">
+              <Card className="bg-[#0F0F11] border border-white/10 p-6" data-testid="market-intelligence">
+                <h2 className="text-lg font-bold text-white mb-4" style={{ fontFamily: 'Chivo' }}>INTELIGENCIA DE MERCADO</h2>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  
+                  {/* Fear & Greed */}
+                  <div className="bg-[#0A0A0A] border border-white/5 rounded-sm p-4">
+                    <p className="text-xs text-zinc-500 font-mono mb-2">FEAR & GREED INDEX</p>
+                    <div className="flex items-baseline gap-2">
+                      <span className={`text-3xl font-black font-mono ${
+                        marketIntel.fear_greed?.value <= 25 ? 'text-[#EF4444]' :
+                        marketIntel.fear_greed?.value <= 45 ? 'text-[#F97316]' :
+                        marketIntel.fear_greed?.value <= 55 ? 'text-[#EAB308]' :
+                        marketIntel.fear_greed?.value <= 75 ? 'text-[#84CC16]' :
+                        'text-[#10B981]'
+                      }`} data-testid="fear-greed-value">
+                        {marketIntel.fear_greed?.value || 0}
+                      </span>
+                    </div>
+                    <p className="text-xs font-mono mt-1" style={{ color:
+                      marketIntel.fear_greed?.value <= 25 ? '#EF4444' :
+                      marketIntel.fear_greed?.value <= 45 ? '#F97316' :
+                      marketIntel.fear_greed?.value <= 55 ? '#EAB308' :
+                      marketIntel.fear_greed?.value <= 75 ? '#84CC16' : '#10B981'
+                    }}>
+                      {marketIntel.fear_greed?.label || "N/A"}
+                    </p>
+                    <div className="w-full bg-[#1A1A1D] rounded-full h-1.5 mt-2">
+                      <div className="h-1.5 rounded-full transition-all" style={{
+                        width: `${marketIntel.fear_greed?.value || 0}%`,
+                        background: `linear-gradient(to right, #EF4444, #EAB308, #10B981)`
+                      }}></div>
+                    </div>
+                  </div>
+
+                  {/* BTC Trend */}
+                  <div className="bg-[#0A0A0A] border border-white/5 rounded-sm p-4">
+                    <p className="text-xs text-zinc-500 font-mono mb-2">TENDENCIA BTC</p>
+                    <p className={`text-2xl font-black font-mono ${
+                      marketIntel.btc_trend?.trend === 'bullish' ? 'text-[#10B981]' :
+                      marketIntel.btc_trend?.trend === 'bearish' ? 'text-[#EF4444]' :
+                      'text-[#EAB308]'
+                    }`} data-testid="btc-trend">
+                      {marketIntel.btc_trend?.trend === 'bullish' ? 'ALCISTA' :
+                       marketIntel.btc_trend?.trend === 'bearish' ? 'BAJISTA' : 'NEUTRAL'}
+                    </p>
+                    <p className={`text-sm font-mono mt-1 ${
+                      (marketIntel.btc_trend?.change_1h || 0) >= 0 ? 'text-[#10B981]' : 'text-[#EF4444]'
+                    }`}>
+                      {(marketIntel.btc_trend?.change_1h || 0) >= 0 ? '+' : ''}{(marketIntel.btc_trend?.change_1h || 0).toFixed(2)}% (1h)
+                    </p>
+                  </div>
+
+                  {/* MACD BTC */}
+                  <div className="bg-[#0A0A0A] border border-white/5 rounded-sm p-4">
+                    <p className="text-xs text-zinc-500 font-mono mb-2">MACD (BTC)</p>
+                    <p className={`text-2xl font-black font-mono ${
+                      marketIntel.btc_indicators?.macd?.trend === 'bullish' ? 'text-[#10B981]' :
+                      marketIntel.btc_indicators?.macd?.trend === 'bearish' ? 'text-[#EF4444]' :
+                      'text-[#EAB308]'
+                    }`} data-testid="macd-trend">
+                      {marketIntel.btc_indicators?.macd?.trend === 'bullish' ? 'ALCISTA' :
+                       marketIntel.btc_indicators?.macd?.trend === 'bearish' ? 'BAJISTA' : 'NEUTRAL'}
+                    </p>
+                    <p className="text-xs text-zinc-500 font-mono mt-1">
+                      H: {(marketIntel.btc_indicators?.macd?.histogram || 0).toFixed(2)}
+                    </p>
+                  </div>
+
+                  {/* Bollinger BTC */}
+                  <div className="bg-[#0A0A0A] border border-white/5 rounded-sm p-4">
+                    <p className="text-xs text-zinc-500 font-mono mb-2">BOLLINGER (BTC)</p>
+                    <p className={`text-2xl font-black font-mono ${
+                      marketIntel.btc_indicators?.bollinger?.position === 'below_lower' ? 'text-[#10B981]' :
+                      marketIntel.btc_indicators?.bollinger?.position === 'above_upper' ? 'text-[#EF4444]' :
+                      'text-zinc-300'
+                    }`} data-testid="bollinger-position">
+                      {marketIntel.btc_indicators?.bollinger?.position === 'below_lower' ? 'SOBREVENDIDO' :
+                       marketIntel.btc_indicators?.bollinger?.position === 'above_upper' ? 'SOBRECOMPRADO' :
+                       marketIntel.btc_indicators?.bollinger?.position === 'lower_half' ? 'ZONA BAJA' : 'ZONA ALTA'}
+                    </p>
+                    <p className="text-xs text-zinc-500 font-mono mt-1">
+                      Banda: ${(marketIntel.btc_indicators?.bollinger?.lower || 0).toFixed(0)} - ${(marketIntel.btc_indicators?.bollinger?.upper || 0).toFixed(0)}
+                    </p>
+                  </div>
+
+                </div>
+              </Card>
+            </div>
+          )}
+
           {/* Daily Progress */}
           <div className="lg:col-span-4">
             <Card className="bg-[#0F0F11] border border-white/10 p-6" data-testid="daily-goal-widget">

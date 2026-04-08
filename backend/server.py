@@ -16,6 +16,7 @@ import json
 from enum import Enum
 from telegram_service import initialize_telegram_service, get_telegram_service
 from scheduler_service import DailyReportScheduler
+from market_intelligence import MarketIntelligence
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -56,6 +57,9 @@ active_connections: List[WebSocket] = []
 
 # Daily report scheduler
 daily_scheduler: Optional[DailyReportScheduler] = None
+
+# Market Intelligence
+market_intel = MarketIntelligence()
 
 # Models
 class OrderSide(str, Enum):
@@ -206,18 +210,19 @@ class TradingEngine:
         return None
     
     async def analyze_and_trade(self, symbol: str):
-        """Analyze market and execute trades"""
+        """Analyze market with intelligence signals and execute trades"""
         try:
-            logger.info(f"🔍 Getting indicators for {symbol}...")
+            logger.info(f"Analyzing {symbol}...")
             indicators = await self.calculate_technical_indicators(symbol)
             if not indicators:
-                logger.warning(f"⚠️ No indicators available for {symbol}")
+                logger.warning(f"No indicators available for {symbol}")
                 return
             
             rsi = indicators["rsi"]
             price = indicators["price"]
             
-            logger.info(f"📊 {symbol}: Price=${price:.2f}, RSI={rsi:.2f}")
+            # Get advanced indicators from market intelligence
+            adv_indicators = await market_intel.get_advanced_indicators(binance_client, symbol)
             
             # Strategy-specific RSI thresholds
             if self.config.strategy == TradingStrategy.AGGRESSIVE_SCALPING:
@@ -233,34 +238,41 @@ class TradingEngine:
                 buy_rsi = 35
                 sell_rsi = 65
 
-            # Buy signal: RSI below threshold (oversold)
-            if rsi < buy_rsi and symbol not in self.active_positions:
-                logger.info(f"BUY SIGNAL for {symbol}: RSI={rsi:.2f} < {buy_rsi}")
-                await self.execute_buy(symbol, price)
-            elif symbol not in self.active_positions:
-                logger.info(f"No buy signal for {symbol}: RSI={rsi:.2f} (waiting for < {buy_rsi})")
+            fg = market_intel.fear_greed_value
+            btc = market_intel.btc_trend
+            macd_trend = adv_indicators.get("macd", {}).get("trend", "neutral")
+            bb_pos = adv_indicators.get("bollinger", {}).get("position", "middle")
             
-            # Sell signal: RSI above threshold or take profit/stop loss
+            logger.info(f"{symbol}: Price=${price:.2f} RSI={rsi:.1f} | F&G={fg} BTC={btc} MACD={macd_trend} BB={bb_pos}")
+
+            # Buy decision using intelligence
+            if symbol not in self.active_positions:
+                should_buy, confidence, reason = market_intel.should_buy(rsi, adv_indicators, buy_rsi)
+                
+                if should_buy:
+                    logger.info(f"BUY {symbol}: Confianza {confidence} - {reason}")
+                    await self.execute_buy(symbol, price)
+                else:
+                    logger.info(f"No comprar {symbol}: {reason}")
+            
+            # Sell decision using intelligence
             elif symbol in self.active_positions:
                 position = self.active_positions[symbol]
                 profit_pct = ((price - position.entry_price) / position.entry_price) * 100
                 
-                logger.info(f"Position {symbol}: Entry=${position.entry_price:.2f}, Current=${price:.2f}, Profit={profit_pct:.2f}%")
+                should_sell, reason = market_intel.should_sell(
+                    rsi, profit_pct, adv_indicators, sell_rsi,
+                    self.config.profit_target, self.config.stop_loss
+                )
                 
-                if profit_pct >= self.config.profit_target:
-                    logger.info(f"SELL SIGNAL for {symbol}: Profit target reached {profit_pct:.2f}% >= {self.config.profit_target}%")
-                    await self.execute_sell(symbol, price, profit_pct)
-                elif profit_pct <= -self.config.stop_loss:
-                    logger.info(f"SELL SIGNAL for {symbol}: Stop loss triggered {profit_pct:.2f}% <= -{self.config.stop_loss}%")
-                    await self.execute_sell(symbol, price, profit_pct)
-                elif rsi > sell_rsi:
-                    logger.info(f"SELL SIGNAL for {symbol}: RSI={rsi:.2f} > {sell_rsi}")
+                if should_sell:
+                    logger.info(f"SELL {symbol}: {reason} (P&L={profit_pct:+.2f}%)")
                     await self.execute_sell(symbol, price, profit_pct)
                 else:
-                    logger.info(f"Holding {symbol}: Waiting for signal (RSI={rsi:.2f}, Profit={profit_pct:.2f}%)")
+                    logger.info(f"Hold {symbol}: {reason} (P&L={profit_pct:+.2f}%)")
         
         except Exception as e:
-            logger.error(f"❌ Error in analyze_and_trade for {symbol}: {str(e)}")
+            logger.error(f"Error in analyze_and_trade for {symbol}: {str(e)}")
             import traceback
             logger.error(traceback.format_exc())
     
@@ -481,13 +493,24 @@ class TradingEngine:
         logger.info(f"🎯 Symbols: {', '.join(self.config.symbols)}")
         
         iteration = 0
+        intel_refresh_counter = 0
         while self.is_running:
             try:
                 iteration += 1
-                logger.info(f"🔄 Trading loop iteration {iteration}")
+                
+                # Refresh market intelligence every 12 iterations (~60 seconds)
+                if intel_refresh_counter % 12 == 0:
+                    logger.info("Refreshing market intelligence...")
+                    await market_intel.refresh(binance_client)
+                    summary = market_intel.get_summary()
+                    fg = summary["fear_greed"]
+                    btc = summary["btc_trend"]
+                    logger.info(f"Intelligence: Fear&Greed={fg['value']} ({fg['label']}) | BTC={btc['trend']} ({btc['change_1h']:+.2f}%)")
+                intel_refresh_counter += 1
+                
+                logger.info(f"Trading loop iteration {iteration}")
                 
                 for symbol in self.config.symbols:
-                    logger.info(f"📈 Analyzing {symbol}...")
                     await self.analyze_and_trade(symbol)
                 
                 # Update balance
@@ -922,6 +945,23 @@ async def get_profit_history():
     except Exception as e:
         logger.error(f"Error fetching profit history: {e}")
         return []
+
+
+@api_router.get("/market/intelligence")
+async def get_market_intelligence():
+    """Get current market intelligence summary"""
+    summary = market_intel.get_summary()
+    
+    # Add advanced indicators for BTC
+    if binance_client:
+        try:
+            btc_indicators = await market_intel.get_advanced_indicators(binance_client, "BTCUSDT")
+            summary["btc_indicators"] = btc_indicators
+        except Exception:
+            summary["btc_indicators"] = None
+    
+    return summary
+
 
 @api_router.post("/telegram/configure")
 async def configure_telegram_post_setup(data: dict):

@@ -1,5 +1,15 @@
 # AlgoTrade X - Bitacora de Cambios
 
+## Version 1.8 - Inteligencia de Mercado (6 Abril 2026)
+- Fear & Greed Index: Compra cuando hay miedo, evita comprar con codicia extrema
+- Correlacion BTC: Si BTC cae fuerte, no compra altcoins para proteger capital
+- MACD: Confirma tendencia alcista/bajista antes de operar
+- Bollinger Bands: Detecta sobrecompra/sobreventa con bandas de volatilidad
+- MA200: Confirma tendencia de largo plazo
+- Sistema de scoring: Combina todas las senales para decidir con confianza alta/media/baja
+- Panel visual en dashboard con 4 indicadores en tiempo real
+- Se refresca cada ~60 segundos automaticamente
+
 ## Version 1.7 - Filtros de Fecha en Grafica (6 Abril 2026)
 - Accesos rapidos: 1D, 7D, 30D, 90D, 180D, 1A (1 ano), TODO
 - Selector de rango de fechas personalizado (fecha inicio - fecha fin)
