@@ -113,6 +113,7 @@ class Trade(BaseModel):
     quantity: float
     profit_loss: Optional[float] = None
     status: str = "open"
+    highest_price: float = 0.0  # For trailing stop
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class PriceData(BaseModel):
@@ -166,20 +167,19 @@ class TradingEngine:
         self.is_running = False
     
     async def calculate_technical_indicators(self, symbol: str):
-        """Calculate RSI, MACD, and other indicators"""
+        """Calculate RSI and volume from 5-minute candles for better signals"""
         try:
-            # Get klines for technical analysis
             klines = await binance_client.get_klines(
                 symbol=symbol,
-                interval="1m",
+                interval="5m",
                 limit=50
             )
             
             closes = [float(k[4]) for k in klines]
+            volumes = [float(k[5]) for k in klines]
             
-            # Simple momentum strategy
             if len(closes) > 14:
-                # Calculate simple RSI
+                # Calculate RSI
                 gains = []
                 losses = []
                 for i in range(1, len(closes)):
@@ -200,10 +200,23 @@ class TradingEngine:
                     rs = avg_gain / avg_loss
                     rsi = 100 - (100 / (1 + rs))
                 
+                # Volume analysis: is current volume above average?
+                avg_volume = sum(volumes[-20:]) / 20 if len(volumes) >= 20 else sum(volumes) / len(volumes)
+                current_volume = volumes[-1]
+                volume_ratio = current_volume / avg_volume if avg_volume > 0 else 1
+                
+                # Reversal confirmation: price started recovering (last 3 candles)
+                reversing_up = len(closes) >= 3 and closes[-1] > closes[-2] and closes[-2] > closes[-3]
+                reversing_down = len(closes) >= 3 and closes[-1] < closes[-2] and closes[-2] < closes[-3]
+                
                 return {
                     "rsi": rsi,
                     "price": closes[-1],
-                    "momentum": (closes[-1] - closes[-10]) / closes[-10] * 100
+                    "momentum": (closes[-1] - closes[-10]) / closes[-10] * 100 if len(closes) > 10 else 0,
+                    "volume_ratio": volume_ratio,
+                    "high_volume": volume_ratio > 1.2,
+                    "reversing_up": reversing_up,
+                    "reversing_down": reversing_down
                 }
         except Exception as e:
             logger.error(f"Error calculating indicators for {symbol}: {str(e)}")
@@ -212,19 +225,20 @@ class TradingEngine:
     async def analyze_and_trade(self, symbol: str):
         """Analyze market with intelligence signals and execute trades"""
         try:
-            logger.info(f"Analyzing {symbol}...")
             indicators = await self.calculate_technical_indicators(symbol)
             if not indicators:
-                logger.warning(f"No indicators available for {symbol}")
                 return
             
             rsi = indicators["rsi"]
             price = indicators["price"]
+            volume_ratio = indicators.get("volume_ratio", 1)
+            high_volume = indicators.get("high_volume", False)
+            reversing_up = indicators.get("reversing_up", False)
             
             # Get advanced indicators from market intelligence
             adv_indicators = await market_intel.get_advanced_indicators(binance_client, symbol)
             
-            # Strategy-specific RSI thresholds
+            # Strategy-specific thresholds
             if self.config.strategy == TradingStrategy.AGGRESSIVE_SCALPING:
                 buy_rsi = 35
                 sell_rsi = 65
@@ -238,27 +252,66 @@ class TradingEngine:
                 buy_rsi = 35
                 sell_rsi = 65
 
-            fg = market_intel.fear_greed_value
             btc = market_intel.btc_trend
-            macd_trend = adv_indicators.get("macd", {}).get("trend", "neutral")
-            bb_pos = adv_indicators.get("bollinger", {}).get("position", "middle")
             
-            logger.info(f"{symbol}: Price=${price:.2f} RSI={rsi:.1f} | F&G={fg} BTC={btc} MACD={macd_trend} BB={bb_pos}")
-
-            # Buy decision using intelligence
+            # BUY LOGIC
             if symbol not in self.active_positions:
                 should_buy, confidence, reason = market_intel.should_buy(rsi, adv_indicators, buy_rsi)
+                
+                # Extra filters for better entries
+                skip_reasons = []
+                
+                # Filter 1: Volume must be decent (avoid low liquidity traps)
+                if volume_ratio < 0.5:
+                    skip_reasons.append(f"Volumen bajo ({volume_ratio:.1f}x)")
+                    should_buy = False
+                
+                # Filter 2: If BTC is crashing hard, don't buy anything
+                if btc == "bearish" and market_intel.btc_change_1h < -1.5:
+                    skip_reasons.append(f"BTC desplome {market_intel.btc_change_1h:.1f}%")
+                    should_buy = False
+                
+                # Filter 3: Wait for reversal confirmation (price starting to go up)
+                if should_buy and not reversing_up and confidence != "alta":
+                    skip_reasons.append("Sin confirmacion de reversion")
+                    should_buy = False
+                
+                # Bonus: High volume + reversal = extra confidence
+                if high_volume and reversing_up:
+                    reason += " | Vol alto + reversion"
                 
                 if should_buy:
                     logger.info(f"BUY {symbol}: Confianza {confidence} - {reason}")
                     await self.execute_buy(symbol, price)
                 else:
-                    logger.info(f"No comprar {symbol}: {reason}")
+                    all_reasons = reason + (" | " + " | ".join(skip_reasons) if skip_reasons else "")
+                    logger.debug(f"Skip {symbol}: {all_reasons}")
             
-            # Sell decision using intelligence
+            # SELL LOGIC with trailing stop
             elif symbol in self.active_positions:
                 position = self.active_positions[symbol]
                 profit_pct = ((price - position.entry_price) / position.entry_price) * 100
+                
+                # Update highest price for trailing stop
+                if price > position.highest_price:
+                    position.highest_price = price
+                    # Update in DB too
+                    await db.trades.update_one(
+                        {"id": position.id},
+                        {"$set": {"highest_price": price}}
+                    )
+                
+                # Trailing stop: if price drops X% from highest, sell
+                if position.highest_price > position.entry_price:
+                    drop_from_high = ((position.highest_price - price) / position.highest_price) * 100
+                    highest_profit_pct = ((position.highest_price - position.entry_price) / position.entry_price) * 100
+                    
+                    # If we were up significantly and price is dropping back
+                    trailing_stop_pct = self.config.stop_loss * 0.8  # tighter trailing
+                    if highest_profit_pct > self.config.profit_target * 0.5 and drop_from_high > trailing_stop_pct:
+                        logger.info(f"TRAILING STOP {symbol}: Was +{highest_profit_pct:.2f}%, dropped {drop_from_high:.2f}% from high")
+                        await self.execute_sell(symbol, price, profit_pct)
+                        return
                 
                 should_sell, reason = market_intel.should_sell(
                     rsi, profit_pct, adv_indicators, sell_rsi,
@@ -269,7 +322,7 @@ class TradingEngine:
                     logger.info(f"SELL {symbol}: {reason} (P&L={profit_pct:+.2f}%)")
                     await self.execute_sell(symbol, price, profit_pct)
                 else:
-                    logger.info(f"Hold {symbol}: {reason} (P&L={profit_pct:+.2f}%)")
+                    logger.debug(f"Hold {symbol}: P&L={profit_pct:+.2f}% | {reason}")
         
         except Exception as e:
             logger.error(f"Error in analyze_and_trade for {symbol}: {str(e)}")

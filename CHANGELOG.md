@@ -1,5 +1,15 @@
 # AlgoTrade X - Bitacora de Cambios
 
+## Version 2.0 - Motor de Trading Optimizado (6 Abril 2026)
+- Trailing Stop Loss: Si sube a +1.5%, el stop sube a +0.5% (protege ganancias)
+- Filtro de Volumen: No compra criptos con volumen bajo (evita trampas)
+- Confirmacion de Reversion: Espera que el precio empiece a subir antes de comprar
+- Proteccion BTC: Si BTC cae >1.5% en 1h, no compra nada
+- Velas de 5 minutos en vez de 1 minuto (menos ruido, mejores senales)
+- Ratios mejorados: Moderado ahora target 2.5% / stop 1.2% (antes 1.5% / 0.5%)
+- Conservador: target 4% / stop 2% | Agresivo: target 1.5% / stop 0.8%
+- Score minimo 2 puntos + RSI + confirmacion para entrar a trade
+
 ## Version 1.8 - Inteligencia de Mercado (6 Abril 2026)
 - Fear & Greed Index: Compra cuando hay miedo, evita comprar con codicia extrema
 - Correlacion BTC: Si BTC cae fuerte, no compra altcoins para proteger capital

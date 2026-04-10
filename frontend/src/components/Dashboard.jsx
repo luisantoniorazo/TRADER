@@ -47,14 +47,14 @@ const Dashboard = () => {
         "RSI < 25 para comprar (sobrevendido fuerte)",
         "RSI > 75 para vender (sobrecomprado fuerte)",
         "2% del saldo por operacion",
-        "Target de ganancia: 3%",
-        "Stop loss: 1.5%",
-        "Menos trades, mayor precision"
+        "Target de ganancia: 4%",
+        "Stop loss: 2%",
+        "Trailing stop + confirmacion de reversion"
       ],
       config: {
         strategy: "swing_trading",
-        profit_target: 3.0,
-        stop_loss: 1.5,
+        profit_target: 4.0,
+        stop_loss: 2.0,
         use_percentage: true,
         balance_percentage: 2.0
       }
@@ -66,19 +66,19 @@ const Dashboard = () => {
       borderColor: "border-yellow-500/50",
       bgColor: "bg-yellow-500/10",
       riskLabel: "Riesgo Medio",
-      description: "Equilibrio entre frecuencia y seguridad. La estrategia actual.",
+      description: "Equilibrio entre frecuencia y seguridad. Optimizado para ganancias consistentes.",
       details: [
         "RSI < 35 para comprar (sobrevendido)",
         "RSI > 65 para vender (sobrecomprado)",
         "5% del saldo por operacion",
-        "Target de ganancia: 1.5%",
-        "Stop loss: 0.5%",
-        "Operaciones frecuentes con reinversion"
+        "Target de ganancia: 2.5%",
+        "Stop loss: 1.2%",
+        "Trailing stop + filtro de volumen + reversion"
       ],
       config: {
         strategy: "aggressive_scalping",
-        profit_target: 1.5,
-        stop_loss: 0.5,
+        profit_target: 2.5,
+        stop_loss: 1.2,
         use_percentage: true,
         balance_percentage: 5.0
       }
@@ -95,14 +95,14 @@ const Dashboard = () => {
         "RSI < 45 para comprar (senal rapida)",
         "RSI > 55 para vender (salida rapida)",
         "10% del saldo por operacion",
-        "Target de ganancia: 0.8%",
-        "Stop loss: 0.3%",
+        "Target de ganancia: 1.5%",
+        "Stop loss: 0.8%",
         "ADVERTENCIA: Alto riesgo de perdidas rapidas"
       ],
       config: {
         strategy: "day_trading",
-        profit_target: 0.8,
-        stop_loss: 0.3,
+        profit_target: 1.5,
+        stop_loss: 0.8,
         use_percentage: true,
         balance_percentage: 10.0
       }
@@ -472,7 +472,7 @@ const Dashboard = () => {
       <div className="bg-black border-b border-white/10 px-6 py-4">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-black text-white tracking-tight" style={{ fontFamily: 'Chivo' }} data-testid="dashboard-title">
-            AlgoTrade X <span className="text-xs font-mono text-zinc-500 ml-2">v1.8</span>
+            AlgoTrade X <span className="text-xs font-mono text-zinc-500 ml-2">v2.0</span>
           </h1>
           
           <div className="flex items-center gap-6">
